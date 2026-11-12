@@ -1,0 +1,21 @@
+Dataset,Type,Color,Shape
+Old businesses,Restaurants,#D55E00,circle
+Old businesses,Bars & taverns,#CC79A7,diamond
+Old businesses,Cafés & bakeries,#E69F00,triangle
+Old businesses,Food & grocery shops,#009E73,square
+Old businesses,Shops & specialty retail,#0072B2,hexagon
+Old businesses,"Hardware, home & garden",#56B4E9,pentagon
+Old businesses,Auto dealers & parts,#44546A,down
+Old businesses,Repair & personal services,#8C8C8C,cross
+National Register,Hotels & apartments,#CC79A7,diamond
+National Register,Commercial & office,#0072B2,hexagon
+National Register,"Theaters, clubs & halls",#E69F00,triangle
+National Register,Houses,#009E73,circle
+National Register,Schools & libraries,#56B4E9,pentagon
+National Register,Government & civic,#44546A,down
+National Register,Churches & temples,#D55E00,cross
+National Register,Industrial & transportation,#8C8C8C,square
+National Register,Historic districts,#7B3294,circle
+National Register,Bridges & other structures,#8B5A2B,down
+National Register,"Parks, sites & monuments",#6AA121,hexagon
+National Register,Ships & boats,#17BECF,square
