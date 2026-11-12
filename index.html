@@ -499,7 +499,8 @@ function buildDataset(cfg, tab, typesCfg) {
     if (/^(approx|circa|c\.?$)/.test(basis) && d.year != null) d.yk = 'approx';
     else if (/^(min|by|lower)/.test(basis) && d.year != null) d.yk = 'by';
     else if (/^(unclear|unknown)/.test(basis)) { d.yk = 'none'; d.year = null; }
-    d.yt = txt(get(r, 'yearlabel')) || (d.yk === 'exact' ? String(d.year) : d.yk === 'approx' ? 'c. ' + d.year : d.yk === 'by' ? 'By ' + d.year : 'Unclear');
+    d.ynr = d.year == null && !basis;  /* no year and no basis: simply not recorded */
+    d.yt = txt(get(r, 'yearlabel')) || (d.yk === 'exact' ? String(d.year) : d.yk === 'approx' ? 'c. ' + d.year : d.yk === 'by' ? 'By ' + d.year : d.ynr ? 'Not recorded' : 'Unclear');
     d.addr = txt(get(r, 'address'));
     d.place = [txt(get(r, 'city')), txt(get(r, 'state'))].filter(Boolean).join(', ') || cfg.place || CFG.place;
     d.hood = txt(get(r, 'hood')); d.notes = txt(get(r, 'notes')); d.src = txt(get(r, 'src')); d.conf = txt(get(r, 'conf'));
@@ -864,7 +865,7 @@ function pinOffset() {
 }
 function yearNote(d) {
   const l = DS.cfg.yearLabel;
-  return d.yk === 'exact' ? l : d.yk === 'approx' ? `${l} (approximate)` : d.yk === 'by' ? `${l}: a minimum, the real year may be earlier` : `${l} unclear`;
+  return d.yk === 'exact' ? l : d.yk === 'approx' ? `${l} (approximate)` : d.yk === 'by' ? `${l}: a minimum, the real year may be earlier` : d.ynr ? `${l}: not recorded` : `${l} unclear`;
 }
 function select(id, {fly = true, scroll = false} = {}) {
   sel = id; if (id != null && fly) userMoved = true;
