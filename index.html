@@ -38,6 +38,9 @@ button{cursor:pointer}
 .dsnav button[aria-pressed="true"]{background:var(--accent);border-color:var(--accent);color:var(--accent-ink)}
 h1{margin:0;font:600 25px/1.15 "Iowan Old Style","Palatino Linotype",Palatino,Georgia,serif;letter-spacing:-.01em}
 .lede{margin:8px 0 0;color:var(--muted)}
+.titlerow{display:flex;align-items:center;gap:10px}
+.titlerow h1{min-width:0;flex:1}
+.paneltog{display:none}
 .banner{margin:12px 0 0;padding:8px 10px;border-radius:9px;background:var(--warn-bg);color:var(--warn);font-size:12.5px}
 .statusbar{position:sticky;top:0;z-index:3;display:flex;align-items:center;justify-content:space-between;gap:8px;padding:9px 20px;background:var(--panel);border-block:1px solid var(--line)}
 .statusbar b{font-size:15px;font-variant-numeric:tabular-nums}
@@ -193,6 +196,14 @@ output{font-weight:650;font-variant-numeric:tabular-nums}
   .head{padding:12px 16px 8px} .dsnav{margin:0 -16px 10px;padding:0 16px 4px} h1{font-size:21px} .lede{font-size:13px;margin-top:4px}
   .statusbar,.sec,.listhead,.tools{padding-left:16px;padding-right:16px} .fine{padding-left:16px;padding-right:16px}
   .card{left:8px;right:8px;width:auto;bottom:26px;max-height:min(62%,360px);padding:12px 14px}
+  .paneltog{display:inline-flex;align-items:center;gap:4px;flex:none;min-height:36px;padding:6px 12px;border:1px solid var(--line);border-radius:999px;background:var(--soft);font-weight:600;font-size:13px;white-space:nowrap}
+  .app.min{grid-template-rows:minmax(0,1fr) auto}
+  .app.min .panel{overflow:hidden}
+  .app.min .panel>:not(.head),.app.min .kicker,.app.min .lede,.app.min .banner{display:none!important}
+  .app.min .head{padding:10px 16px calc(10px + env(safe-area-inset-bottom))}
+  .app.min .dsnav{margin-bottom:8px}
+  .app.min h1{font-size:19px}
+  .app.min .card{max-height:min(70%,560px)}
   .card .notes{max-height:5.5em}
   .card h3{font-size:18px}
   .notice{left:8px;right:60px;top:8px;font-size:12.5px;padding:7px 10px}
@@ -212,7 +223,7 @@ output{font-weight:650;font-variant-numeric:tabular-nums}
     <div class="head">
       <p class="kicker" id="siteTitle">Seattle, mapped</p>
       <nav class="dsnav" id="dsnav" aria-label="Datasets" hidden></nav>
-      <h1 id="dsTitle">Loading…</h1>
+      <div class="titlerow"><h1 id="dsTitle">Loading…</h1><button class="paneltog" id="ptog" type="button" aria-controls="panel" aria-expanded="true">Hide ▾</button></div>
       <p class="lede" id="dsDesc"></p>
       <p class="banner" id="banner" hidden></p>
     </div>
@@ -936,7 +947,18 @@ function yearNote(d) {
   const l = DS.cfg.yearLabel;
   return d.yk === 'exact' ? l : d.yk === 'approx' ? `${l} (approximate)` : d.yk === 'by' ? `${l}: a minimum, the real year may be earlier` : d.ynr ? `${l}: not recorded` : `${l} unclear`;
 }
+/* phone layout: the panel under the map can shrink to a bar, and does so when a place is opened */
+const narrowMQ = matchMedia('(max-width:820px)');
+function setPanelMin(on) {
+  const app = $('.app'), was = app.classList.contains('min'); on = on && narrowMQ.matches;
+  app.classList.toggle('min', on);
+  const b = $('#ptog'); b.setAttribute('aria-expanded', String(!on)); b.textContent = on ? 'Show info ▴' : 'Hide ▾';
+  if (was !== on) measure();
+}
+$('#ptog').addEventListener('click', () => { const on = !$('.app').classList.contains('min'); setPanelMin(on); if (!on) $('#panel').scrollTop = 0; });
+narrowMQ.addEventListener('change', () => { if (!narrowMQ.matches) setPanelMin(false); });
 function select(id, {fly = true, scroll = false} = {}) {
+  if (id != null) setPanelMin(true);
   sel = id; if (id != null && fly) userMoved = true;
   const d = id == null ? null : rows[id];
   rebuildMarkers(); positionMarkers();
