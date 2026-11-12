@@ -1,0 +1,1242 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Seattle, mapped</title>
+<meta name="description" content="Interesting places in Seattle on an OpenStreetMap map, read live from a shared spreadsheet. Switch between datasets and filter each one.">
+<style>
+:root{
+  --bg:#f4efe6; --panel:#fffdf8; --ink:#241f19; --muted:#675f53; --line:#e4dccd; --soft:#f3ede1;
+  --accent:#a3401c; --accent-ink:#fff; --focus:#1b6ec2; --map-bg:#e9e4da;
+  --shadow:0 6px 22px rgba(36,31,25,.20); --card:#fffdf8; --lbl:#7a705f; --lbl-water:#5b87aa; --warn:#8a5a00; --warn-bg:#fff4d6;
+  color-scheme:light dark;
+}
+@media (prefers-color-scheme:dark){
+  :root{ --bg:#14120d; --panel:#1e1b15; --ink:#f3ede0; --muted:#aaa190; --line:#393327; --soft:#2a261d;
+    --accent:#f0996d; --accent-ink:#1b130d; --focus:#79b8ff; --map-bg:#2a2823; --shadow:0 6px 22px rgba(0,0,0,.55); --card:#25211a; --lbl:#b5ac99; --lbl-water:#7ea8c9; --warn:#f2cf7a; --warn-bg:#3a2f12; }
+}
+*{box-sizing:border-box}
+html,body{height:100%;margin:0}
+body{background:var(--bg);color:var(--ink);font:14px/1.45 system-ui,-apple-system,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif;-webkit-font-smoothing:antialiased;overflow:hidden}
+button,input,select{font:inherit;color:inherit}
+button{cursor:pointer}
+:focus-visible{outline:2px solid var(--focus);outline-offset:2px}
+.sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
+[hidden]{display:none!important}
+
+.app{display:grid;grid-template-columns:400px minmax(0,1fr);height:100vh;height:100dvh}
+.panel{background:var(--panel);border-right:1px solid var(--line);overflow-y:auto;overflow-x:hidden;position:relative;z-index:2;overscroll-behavior:contain}
+.mapwrap{position:relative;min-width:0;min-height:0;overflow:hidden}
+
+/* panel */
+.head{padding:18px 20px 12px}
+.kicker{margin:0 0 8px;font-size:11px;letter-spacing:.09em;text-transform:uppercase;color:var(--accent);font-weight:650}
+.dsnav{display:flex;gap:6px;overflow-x:auto;margin:0 -20px 12px;padding:0 20px 4px;scrollbar-width:thin}
+.dsnav button{flex:none;white-space:nowrap;border:1px solid var(--line);border-radius:999px;padding:6px 13px;background:var(--panel);font-weight:600}
+.dsnav button .n{font-weight:500;opacity:.7;margin-left:4px;font-variant-numeric:tabular-nums}
+.dsnav button[aria-pressed="true"]{background:var(--accent);border-color:var(--accent);color:var(--accent-ink)}
+h1{margin:0;font:600 25px/1.15 "Iowan Old Style","Palatino Linotype",Palatino,Georgia,serif;letter-spacing:-.01em}
+.lede{margin:8px 0 0;color:var(--muted)}
+.banner{margin:12px 0 0;padding:8px 10px;border-radius:9px;background:var(--warn-bg);color:var(--warn);font-size:12.5px}
+.statusbar{position:sticky;top:0;z-index:3;display:flex;align-items:center;justify-content:space-between;gap:8px;padding:9px 20px;background:var(--panel);border-block:1px solid var(--line)}
+.statusbar b{font-size:15px;font-variant-numeric:tabular-nums}
+.linkbtn{background:none;border:0;padding:2px 0;color:var(--accent);text-decoration:underline;text-underline-offset:2px;font-weight:550}
+.sec{padding:14px 20px 12px;border-bottom:1px solid var(--line)}
+.sec-head{display:flex;align-items:baseline;justify-content:space-between;gap:10px;margin-bottom:8px}
+h2{margin:0;font-size:12px;letter-spacing:.07em;text-transform:uppercase;color:var(--muted);font-weight:650}
+output{font-weight:650;font-variant-numeric:tabular-nums}
+.field{position:relative;display:block}
+.field input{width:100%;height:38px;padding:0 34px 0 12px;border:1px solid var(--line);border-radius:10px;background:var(--soft)}
+.field input::placeholder{color:var(--muted)}
+.field .clr{position:absolute;right:4px;top:4px;width:30px;height:30px;border:0;background:none;color:var(--muted);font-size:18px;border-radius:8px}
+.eras{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:10px}
+.eras button{padding:4px 10px;border:1px solid var(--line);border-radius:999px;background:var(--panel);font-size:12.5px;white-space:nowrap}
+.eras button[aria-pressed="true"]{background:var(--accent);border-color:var(--accent);color:var(--accent-ink)}
+.hist{display:grid;gap:3px;align-items:end;height:46px;margin:0 10px}
+.hist i{display:block;background:var(--line);border-radius:3px 3px 0 0;min-height:2px;transition:height .2s,background .2s}
+.hist i.on{background:color-mix(in srgb,var(--accent) 55%,var(--panel))}
+.slider{position:relative;height:30px;margin:0 10px}
+.slider .track,.slider .fill{position:absolute;top:13px;height:4px;border-radius:2px}
+.slider .track{left:0;right:0;background:var(--line)}
+.slider .fill{background:var(--accent)}
+.slider input{position:absolute;left:-10px;width:calc(100% + 20px);top:0;height:30px;margin:0;background:none;pointer-events:none;-webkit-appearance:none;appearance:none}
+.slider input::-webkit-slider-runnable-track{background:transparent;height:30px}
+.slider input::-moz-range-track{background:transparent;height:30px}
+.slider input::-webkit-slider-thumb{-webkit-appearance:none;pointer-events:auto;width:20px;height:20px;margin-top:5px;border-radius:50%;background:var(--panel);border:2px solid var(--accent);box-shadow:0 1px 3px rgba(0,0,0,.35);cursor:grab}
+.slider input::-moz-range-thumb{pointer-events:auto;width:16px;height:16px;border-radius:50%;background:var(--panel);border:2px solid var(--accent);box-shadow:0 1px 3px rgba(0,0,0,.35);cursor:grab}
+.ticks{position:relative;height:16px;margin:0 10px 8px;font-size:11px;color:var(--muted);font-variant-numeric:tabular-nums}
+.ticks span{position:absolute;transform:translateX(-50%)}
+.check{display:flex;align-items:flex-start;gap:9px;padding:5px 0;cursor:pointer}
+.check input{margin:3px 0 0;accent-color:var(--accent)}
+.check small{display:block;color:var(--muted);font-size:12px;line-height:1.35}
+.check .n{color:var(--muted);font-variant-numeric:tabular-nums}
+.types{list-style:none;margin:0;padding:0}
+.types li{position:relative;display:flex;align-items:center;border-radius:8px}
+.types li:hover{background:var(--soft)}
+.trow{flex:1;display:flex;align-items:center;gap:9px;padding:6px 6px;cursor:pointer;min-width:0}
+.trow input{margin:0;accent-color:var(--accent)}
+.trow .tn{flex:1;min-width:0}
+.trow .tc{color:var(--muted);font-variant-numeric:tabular-nums;min-width:2ch;text-align:right;padding-right:6px}
+.types li.zero .tn,.types li.zero .sw{opacity:.45}
+.only{position:absolute;right:38px;top:50%;transform:translateY(-50%);border:0;background:var(--soft);border-radius:6px;color:var(--accent);padding:2px 8px;font-size:12px;opacity:0;font-weight:600}
+.types li:hover .only,.only:focus-visible{opacity:1}
+@media (hover:none){.only{opacity:1}}
+.sw{display:inline-flex;width:20px;height:20px;flex:none}
+.sw svg{width:20px;height:20px;overflow:visible}
+.sw .shape{fill:var(--c);stroke:#fff;stroke-width:1.6;paint-order:stroke}
+.hollow .shape{fill:#fff;stroke:var(--c);stroke-width:3}
+.dashed .shape{stroke-dasharray:3.2 2.4}
+.listhead{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:14px 20px 6px}
+.listhead select{border:1px solid var(--line);border-radius:8px;background:var(--soft);padding:4px 6px;font-size:13px}
+.list{list-style:none;margin:0;padding:0 10px 8px}
+.item{display:flex;align-items:center;gap:10px;width:100%;padding:8px 10px;border:0;border-radius:10px;background:none;text-align:left}
+.item:hover,.item.hl{background:var(--soft)}
+.item[aria-current="true"]{background:color-mix(in srgb,var(--accent) 14%,var(--panel));box-shadow:inset 3px 0 0 var(--accent)}
+.item .im{flex:1;min-width:0;display:flex;flex-direction:column}
+.item .in{font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.item .is{color:var(--muted);font-size:12.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.item .iy{font-variant-numeric:tabular-nums;font-weight:650;color:var(--muted);white-space:nowrap}
+.empty{margin:6px 20px 16px;padding:14px;border:1px dashed var(--line);border-radius:10px;color:var(--muted)}
+.tools{padding:14px 20px;border-top:1px solid var(--line);display:flex;flex-wrap:wrap;gap:10px;align-items:center}
+.btn{padding:7px 12px;border:1px solid var(--line);border-radius:9px;background:var(--panel);font-weight:550}
+.btn:hover{background:var(--soft)}
+.btn.primary{background:var(--accent);border-color:var(--accent);color:var(--accent-ink)}
+.fine{margin:0;padding:0 20px 22px;color:var(--muted);font-size:12px}
+.fine a{color:inherit}
+
+/* map */
+#map{position:absolute;inset:0;background:var(--map-bg);touch-action:none;cursor:grab;user-select:none;-webkit-user-select:none;overflow:hidden;outline:none}
+#map.dragging{cursor:grabbing}
+#tiles,#markers,#labels{position:absolute;left:0;top:0;width:100%;height:100%}
+#tiles{overflow:hidden;z-index:0}
+#markers{z-index:1}
+#labels{z-index:0;pointer-events:none;display:none;overflow:hidden}
+#map.notiles #labels{display:block}
+.lbl{position:absolute;left:0;top:0;white-space:nowrap;font-size:12px;color:var(--lbl);text-shadow:0 0 3px var(--map-bg),0 0 3px var(--map-bg),0 0 6px var(--map-bg)}
+.lbl.hood{font-weight:650;text-transform:uppercase;font-size:11px;letter-spacing:.09em}
+.lbl.water{font-style:italic;color:var(--lbl-water);font-size:13px;letter-spacing:.04em}
+.lbl.land::before{content:"";display:inline-block;width:6px;height:6px;border-radius:50%;background:var(--lbl);margin-right:5px;vertical-align:1px}
+.tile{position:absolute;left:0;top:0;width:256.6px;height:256.6px;transform-origin:0 0;max-width:none;pointer-events:none;user-select:none;-webkit-user-drag:none}
+@media (prefers-color-scheme:dark){.tile{filter:brightness(.82) contrast(1.05) saturate(.9)}}
+.pin,.cluster{position:absolute;left:0;top:0;will-change:transform}
+.pin{width:30px;height:30px;margin:-15px 0 0 -15px;padding:0;border:0;background:none;display:grid;place-items:center}
+.pin svg{width:26px;height:26px;overflow:visible;filter:drop-shadow(0 1px 1.5px rgba(0,0,0,.5));transition:transform .12s}
+.pin .shape{fill:var(--c);stroke:#fff;stroke-width:2;paint-order:stroke}
+.pin.hollow .shape{fill:#fff;stroke:var(--c);stroke-width:3.4}
+.pin.dashed .shape{stroke-dasharray:3.4 2.4}
+.pin.approx{opacity:.8}
+.pin:hover svg,.pin.hl svg{transform:scale(1.25)}
+.pin:hover,.pin.hl{z-index:10}
+.pin.sel{z-index:20}
+.pin.sel svg{transform:scale(1.5);filter:drop-shadow(0 2px 4px rgba(0,0,0,.55))}
+.pin.sel::after{content:"";position:absolute;inset:-1px;border-radius:50%;border:2px solid var(--accent);animation:ping 1.6s ease-out infinite;pointer-events:none}
+@keyframes ping{from{transform:scale(1.4);opacity:.85}to{transform:scale(2.4);opacity:0}}
+.cluster{display:grid;place-items:center;border-radius:50%;background:#2b2621;color:#fff;font-weight:700;border:3px solid rgba(255,255,255,.92);box-shadow:0 2px 8px rgba(0,0,0,.45);padding:0;font-size:13px;font-variant-numeric:tabular-nums}
+.cluster:hover{background:var(--accent);color:var(--accent-ink)}
+.pin.off{display:none}
+
+.ctl{position:absolute;top:12px;right:12px;z-index:5;display:flex;flex-direction:column;gap:8px;align-items:flex-end}
+.zoom{display:flex;flex-direction:column;border-radius:10px;overflow:hidden;box-shadow:var(--shadow);background:var(--card)}
+.zoom button{width:38px;height:38px;border:0;background:none;font-size:20px;line-height:1;display:grid;place-items:center}
+.zoom button+button{border-top:1px solid var(--line)}
+.zoom button:hover{background:var(--soft)}
+.zoom svg{width:18px;height:18px}
+.basemap{border:0;border-radius:10px;background:var(--card);box-shadow:var(--shadow);padding:8px 10px;font-size:12.5px;max-width:190px}
+.notice{position:absolute;z-index:5;top:12px;left:12px;right:70px;max-width:520px;display:flex;flex-wrap:wrap;align-items:center;gap:6px 10px;padding:9px 12px;border-radius:12px;background:var(--card);box-shadow:var(--shadow);font-size:13px}
+.notice .msg{flex:1 1 220px}
+.notice .hint{display:block;color:var(--muted);font-size:12px;margin-top:2px}
+.notice .bar{flex:1 1 100%;height:4px;border-radius:2px;background:var(--line);overflow:hidden}
+.notice .bar>div{height:100%;width:0;background:var(--accent);transition:width .3s}
+.notice .x{border:0;background:none;color:var(--muted);font-size:18px;line-height:1;padding:2px 6px}
+.loading{position:absolute;z-index:6;left:50%;top:50%;transform:translate(-50%,-50%);padding:10px 16px;border-radius:12px;background:var(--card);box-shadow:var(--shadow);font-weight:550}
+.toast{position:absolute;z-index:6;left:50%;bottom:44px;transform:translateX(-50%);max-width:min(520px,calc(100% - 24px));padding:10px 14px;border-radius:12px;background:#2b2621;color:#fff;box-shadow:var(--shadow);font-size:13px}
+.attrib{position:absolute;z-index:4;right:0;bottom:0;padding:2px 8px;background:rgba(255,255,255,.82);color:#333;font-size:11px;border-top-left-radius:6px}
+.attrib a{color:#0b5cad}
+.card{position:absolute;z-index:7;left:12px;bottom:30px;width:min(380px,calc(100% - 24px));max-height:calc(100% - 90px);overflow:auto;background:var(--card);border-radius:14px;box-shadow:var(--shadow);padding:16px 16px 14px}
+.card .x{position:absolute;top:6px;right:6px;width:32px;height:32px;border:0;border-radius:8px;background:none;font-size:20px;color:var(--muted)}
+.card .x:hover{background:var(--soft)}
+.chips{display:flex;flex-wrap:wrap;gap:6px;margin:0 28px 8px 0}
+.chip{display:inline-flex;align-items:center;gap:6px;padding:2px 9px 2px 5px;border-radius:999px;background:var(--soft);font-size:12px;font-weight:600}
+.chip .sw,.chip .sw svg{width:16px;height:16px}
+.chip.conf{padding-left:9px}
+.chip.conf i{width:8px;height:8px;border-radius:50%;background:var(--cc)}
+.card h3{margin:0 0 2px;font:600 20px/1.2 "Iowan Old Style","Palatino Linotype",Palatino,Georgia,serif}
+.card .yr{margin:0 0 8px;color:var(--muted);font-size:13px}
+.card .yr b{color:var(--ink);font-size:22px;margin-right:6px;font-variant-numeric:tabular-nums;font-family:"Iowan Old Style","Palatino Linotype",Palatino,Georgia,serif}
+.card .addr{margin:0 0 8px;font-weight:550}
+.card .addr span{color:var(--muted);font-weight:400}
+.card .notes{margin:0 0 8px;color:var(--ink);opacity:.9;font-size:13px;max-height:9.5em;overflow:auto;padding-right:4px;white-space:pre-line}
+.card .meta{margin:0 0 10px;font-size:12.5px;color:var(--muted)}
+.card .meta div{margin:1px 0;overflow-wrap:anywhere}
+.card .meta a{color:var(--accent)}
+.card .links{display:flex;flex-wrap:wrap;gap:8px 14px}
+.card .links a{color:var(--accent);font-weight:600;text-underline-offset:2px}
+.card .pos{margin:10px 0 0;font-size:12px;color:var(--muted)}
+
+@media (max-width:820px){
+  .app{grid-template-columns:1fr;grid-template-rows:54vh minmax(0,1fr);grid-template-rows:54dvh minmax(0,1fr)}
+  .mapwrap{order:-1}
+  .panel{border-right:0;border-top:1px solid var(--line)}
+  .head{padding:12px 16px 8px} .dsnav{margin:0 -16px 10px;padding:0 16px 4px} h1{font-size:21px} .lede{font-size:13px;margin-top:4px}
+  .statusbar,.sec,.listhead,.tools{padding-left:16px;padding-right:16px} .fine{padding-left:16px;padding-right:16px}
+  .card{left:8px;right:8px;width:auto;bottom:26px;max-height:min(62%,360px);padding:12px 14px}
+  .card .notes{max-height:5.5em}
+  .card h3{font-size:18px}
+  .notice{left:8px;right:60px;top:8px;font-size:12.5px;padding:7px 10px}
+  .notice .hint{display:none}
+  .notice .btn{padding:5px 10px;font-size:12.5px}
+  .mapwrap.has-card .notice{display:none}
+  .ctl{top:8px;right:8px}
+  .basemap{display:none}
+}
+@media (prefers-reduced-motion:reduce){.pin.sel::after{animation:none}.hist i{transition:none}}
+</style>
+<script src="config.js"></script>
+</head>
+<body>
+<div class="app">
+  <aside class="panel" id="panel" aria-label="Datasets, filters and results">
+    <div class="head">
+      <p class="kicker" id="siteTitle">Seattle, mapped</p>
+      <nav class="dsnav" id="dsnav" aria-label="Datasets" hidden></nav>
+      <h1 id="dsTitle">Loading…</h1>
+      <p class="lede" id="dsDesc"></p>
+      <p class="banner" id="banner" hidden></p>
+    </div>
+    <div class="statusbar" role="status" aria-live="polite">
+      <span><b id="showing">0</b> <span id="ofTotal"></span> shown</span>
+      <button class="linkbtn" id="reset" type="button">Reset filters</button>
+    </div>
+
+    <section class="sec" aria-label="Search">
+      <label class="field"><span class="sr">Search this dataset</span>
+        <input id="q" type="search" placeholder="Search name, address or neighborhood" autocomplete="off" spellcheck="false">
+        <button class="clr" id="qclr" type="button" aria-label="Clear search" hidden>×</button>
+      </label>
+    </section>
+
+    <section class="sec" id="secYear" aria-labelledby="h-year" hidden>
+      <div class="sec-head"><h2 id="h-year">Year</h2><output id="yrOut" for="y0 y1">Any year</output></div>
+      <div class="eras" id="eras" role="group" aria-label="Quick year ranges"></div>
+      <div class="hist" id="hist" aria-hidden="true"></div>
+      <div class="slider">
+        <div class="track"></div><div class="fill" id="fill"></div>
+        <input id="y0" type="range" aria-label="Earliest year">
+        <input id="y1" type="range" aria-label="Latest year">
+      </div>
+      <div class="ticks" id="ticks" aria-hidden="true"></div>
+      <label class="check" id="lblBy"><input type="checkbox" id="inclBy" checked>
+        <span><span class="sw hollow" id="swBy"></span></span>
+        <span>Include “minimum” years <span class="n" id="nBy"></span>
+          <small>Hollow pins: the year is a minimum (“By 19xx”), so the real year may be earlier.</small></span></label>
+      <label class="check" id="lblNone"><input type="checkbox" id="inclNone" checked>
+        <span><span class="sw hollow dashed" id="swNone"></span></span>
+        <span>Include year unclear <span class="n" id="nNone"></span></span></label>
+    </section>
+
+    <section class="sec" id="secType" aria-labelledby="h-type" hidden>
+      <div class="sec-head"><h2 id="h-type">Type</h2>
+        <span><button class="linkbtn" id="tAll" type="button">All</button> · <button class="linkbtn" id="tNone" type="button">None</button></span></div>
+      <ul class="types" id="types"></ul>
+    </section>
+
+    <div class="listhead">
+      <h2>Results</h2>
+      <label><span class="sr">Sort results</span>
+        <select id="sort"><option value="year">Earliest year first</option><option value="name">Name A–Z</option><option value="hood">Neighborhood</option></select></label>
+    </div>
+    <ol class="list" id="list"></ol>
+    <div class="empty" id="empty" hidden>Nothing matches these filters. <button class="linkbtn" id="reset2" type="button">Reset filters</button></div>
+
+    <div class="tools">
+      <button class="btn" id="csv" type="button">Download these as CSV</button>
+    </div>
+    <p class="fine" id="fine">Map data © <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a> contributors.</p>
+  </aside>
+
+  <main class="mapwrap" id="mapwrap">
+    <div id="map" tabindex="0" role="application" aria-label="Map. Drag to pan, scroll to zoom.">
+      <div id="tiles"></div>
+      <div id="labels" aria-hidden="true"></div>
+      <div id="markers"></div>
+    </div>
+    <div class="notice" id="notice" role="status" hidden>
+      <span class="msg"><span id="noticeMsg"></span> <span class="hint" id="noticeHint"></span></span>
+      <button class="btn primary" id="snap" type="button">Snap pins to addresses</button>
+      <button class="x" id="noticeX" type="button" aria-label="Dismiss" hidden>×</button>
+      <div class="bar" id="snapBar" hidden><div></div></div>
+    </div>
+    <div class="ctl">
+      <div class="zoom">
+        <button id="zin" type="button" aria-label="Zoom in">+</button>
+        <button id="zout" type="button" aria-label="Zoom out">−</button>
+        <button id="fit" type="button" aria-label="Fit map to the places shown" title="Fit to results"><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M3 7V3h4M13 3h4v4M17 13v4h-4M7 17H3v-4"/></svg></button>
+      </div>
+      <select class="basemap" id="basemap" aria-label="Map tiles">
+        <option value="osm">OpenStreetMap</option>
+        <option value="carto">OSM data · CARTO style</option>
+      </select>
+    </div>
+    <div class="loading" id="loading" role="status">Loading data…</div>
+    <div class="toast" id="toast" role="status" hidden></div>
+    <article class="card" id="card" hidden aria-live="polite"></article>
+    <div class="attrib" id="attrib"></div>
+  </main>
+</div>
+
+<script>
+(() => {
+'use strict';
+/* ====================================================================================
+   Settings come from config.js (window.MAP_CONFIG). Everything else is read live from
+   the Google Sheet: a "Datasets" tab, an optional "Types" tab, and one tab per dataset.
+   ==================================================================================== */
+const CFG = Object.assign({sheetId: '', title: 'Seattle, mapped', center: [47.6205, -122.335], place: 'Seattle, WA'}, window.MAP_CONFIG || {});
+{ const q = new URLSearchParams(location.search).get('sheet'); if (q) CFG.sheetId = q.trim(); }
+const SAMPLE = {"datasets":{"labels":["Dataset","Tab","Description","Year label","Type label","Eras","Place"],"rows":[["Old businesses","Old businesses","Seattle businesses open to the public that started 50+ years ago (before about November 1976). Every one appears on the City of Seattle’s active business license list.","Founded","Type of business","1900, 1930, 1950","Seattle, WA"],["National Register","National Register","Places in Seattle on the National Register of Historic Places that still exist: buildings, historic districts, bridges, parks, ships and sites. Demolished or destroyed listings are left out. The year shown is when a place was added to the Register, not when it was built.","Listed on the Register","Kind of place","1980, 1990, 2010","Seattle, WA"]]},"types":{"labels":["Dataset","Type","Color","Shape"],"rows":[["Old businesses","Restaurants","#D55E00","circle"],["Old businesses","Bars & taverns","#CC79A7","diamond"],["Old businesses","Cafés & bakeries","#E69F00","triangle"],["Old businesses","Food & grocery shops","#009E73","square"],["Old businesses","Shops & specialty retail","#0072B2","hexagon"],["Old businesses","Hardware, home & garden","#56B4E9","pentagon"],["Old businesses","Auto dealers & parts","#44546A","down"],["Old businesses","Repair & personal services","#8C8C8C","cross"],["National Register","Hotels & apartments","#CC79A7","diamond"],["National Register","Commercial & office","#0072B2","hexagon"],["National Register","Theaters, clubs & halls","#E69F00","triangle"],["National Register","Houses","#009E73","circle"],["National Register","Schools & libraries","#56B4E9","pentagon"],["National Register","Government & civic","#44546A","down"],["National Register","Churches & temples","#D55E00","cross"],["National Register","Industrial & transportation","#8C8C8C","square"],["National Register","Historic districts","#7B3294","circle"],["National Register","Bridges & other structures","#8B5A2B","down"],["National Register","Parks, sites & monuments","#6AA121","hexagon"],["National Register","Ships & boats","#17BECF","square"]]},"tabs":{"Old businesses":{"labels":["Name","Type","Year","Year basis","Year label","Address","City","State","Neighborhood","Latitude","Longitude","Position","Confidence","Notes","Source link","Category","City license file","License start"],"rows":[["Jules Maes Saloon","Bars & taverns",1888,"Sourced","","5919 Airport Way S","Seattle","WA","Georgetown",47.547,-122.3207,"Approximate","Medium","Popularly billed as Seattle's oldest bar (1888), but detailed histories differ: the building dates to 1898, Jules Maes bought the Rainier Bar across the street around 1912 and moved here in 1937, and the NW Bars dating site lists 1907/1937. Closed in 2020 and reopened Jan 2021 under a new owner. Every version is 50+ years ago. The city license file shows the current license starting May 16, 2026 (AGL Bar), so ownership may have changed again.","https://washingtonbeerblog.com/the-proud-and-colorful-history-of-seattles-jules-maes-saloon/","Bar","Yes (AGL Bar)","2026-05-16"],["Merchants Cafe & Saloon","Restaurants",1890,"Sourced","","109 Yesler Way","Seattle","WA","Pioneer Square",47.6017,-122.3341,"Approximate","High","","https://visitseattle.org/food-drink/restaurants/old-school-seattle-restaurants/","Restaurant/Bar","Yes (Merchants Cafe & Saloon LLC)","2011-03-01"],["Central Saloon","Bars & taverns",1892,"Sourced","","207 1st Ave S","Seattle","WA","Pioneer Square",47.6005,-122.3338,"Approximate","Medium","Founding year is disputed: the NW Bars dating site lists 1898/1933 for the bar. Every version is 50+ years ago.","https://sites.google.com/view/nwbars/home/seattles-oldest-bars","Bar","Yes (Central Associates Inc)","1991-01-16"],["Filson","Shops & specialty retail",1897,"Sourced","","1741 1st Ave S","Seattle","WA","SoDo",47.588,-122.3345,"Approximate","High","Flagship store has been at its HQ/factory since 2012.","","Retail","Yes (CC Filson Co; wholesale class)","2005-01-01"],["Ye Olde Curiosity Shop","Shops & specialty retail",1899,"Sourced","","1001 Alaskan Way","Seattle","WA","Waterfront",47.6037,-122.3396,"Approximate","High","Pier 54.","","Retail","Yes (Ye Olde Curiosity Shop Inc)","1976-01-01"],["University Book Store","Shops & specialty retail",1900,"Sourced","","4326 University Way NE","Seattle","WA","U District",47.6603,-122.3131,"Approximate","High","Independent college retailer founded by students. Store hours listed on its site were limited; confirm before visiting.","https://udistrictseattle.com/business/ubookstoreseattle","Retail/Bookstore","Yes (University Book Store; 1900 date looks like a placeholder)","1900-01-01"],["Virginia Inn","Restaurants",1903,"Sourced","","1937 1st Ave","Seattle","WA","Pike Place Market area",47.6114,-122.3425,"Approximate","High","","https://sites.google.com/view/nwbars/home/seattles-oldest-bars","Restaurant/Bar","Yes (First & Virginia LLC)","2019-02-21"],["Maneki","Restaurants",1904,"Sourced","","304 6th Ave S","Seattle","WA","Chinatown-International District",47.5992,-122.3252,"Approximate","Medium","Not continuous: closed during WWII. Year is the original opening.","https://visitseattle.org/food-drink/restaurants/old-school-seattle-restaurants/","Restaurant","Yes (OTO Inc)","1994-11-09"],["Hattie's Hat","Bars & taverns",1904,"Sourced","","5231 Ballard Ave NW","Seattle","WA","Ballard",47.6687,-122.3852,"Approximate","Medium","Bar installed 1904. Former names: Old Home, Malmen's.","","Bar/Restaurant","Yes (Magic Hippy Inc)","2009-07-01"],["Von's 1000 Spirits","Bars & taverns",1904,"Sourced","","1225 1st Ave","Seattle","WA","Downtown",47.6069,-122.339,"Approximate","Medium","Operating since 1904 as Rippe's; Von's name since 1940; at its current location since 2013 (NW Bars guide). Address from the city license file; that account's start date (1988) is later than the founding.","https://sites.google.com/view/nwbars/home/seattles-oldest-bars","Bar/Restaurant","Yes (Vons Cafe Corp)","1988-08-18"],["The Athenian Inn","Restaurants",1909,"Sourced","","1517 Pike Pl","Seattle","WA","Pike Place Market",47.6093,-122.3426,"Approximate","High","","https://visitseattle.org/food-drink/restaurants/old-school-seattle-restaurants/","Restaurant","Yes (Catering Advisors Inc)","1966-09-06"],["Market Spice","Food & grocery shops",1911,"Sourced","","85 Pike St","Seattle","WA","Pike Place Market",47.6091,-122.3421,"Approximate","Medium","Suite A. Founded 1911 per the Market's own page; open (hours listed). Address from the city license file; that account's start date (1985) is later than the founding.","https://www.pikeplacemarket.org/vendor/market-spice/","Retail/Spice shop","Yes (Samuel & Co Inc)","1985-07-01"],["Pure Food Fish Market","Food & grocery shops",1911,"Sourced","","1511 Pike Pl","Seattle","WA","Pike Place Market",47.6092,-122.3424,"Approximate","Medium","Sources conflict: 1911 or 1956. Either date is 50+ years ago.","","Retail","Yes (Solomon Amon Inc)","1968-08-01"],["Three Girls Bakery","Cafés & bakeries",1912,"Sourced","","1514 Pike Pl","Seattle","WA","Pike Place Market",47.6093,-122.3425,"Approximate","High","","https://www.pikeplacemarket.org/16-things-you-may-not-know-about-pike-place-market/","Bakery","Yes (sole proprietor)","2009-07-14"],["Angel's Shoe Repair","Repair & personal services",1912,"Sourced","","501B 15th Ave E","Seattle","WA","Capitol Hill",47.6218,-122.3112,"Approximate","Medium","Family business that started on Roosevelt and moved four times. The 2012 source article (its centennial year) put it at 1465 E Republican St, but the city license file (Nov 2026) shows an active license at 501B 15th Ave E, so it appears to have moved again. Confirm it is open.","https://www.capitolhillseattle.com/2012/07/angels-shoe-repair-beats-a-100-year-path-to-capitol-hill/","Retail/Repair","Yes, at 501B 15th Ave E (sole proprietor)","1982-01-01"],["Tsue Chong Co. (Rose Brand noodles)","Food & grocery shops",1917,"Sourced","","508 8th Ave S","Seattle","WA","Chinatown-International District",47.5976,-122.3222,"Approximate","Medium","Noodle and fortune cookie maker with a retail shop. Seattle Met gives both 1898 and 1917 and calls it 100+ years old. Address and hours are from a 2021 article, and the company may relocate: confirm.","https://nwasianweekly.com/2021/08/tsue-chong-company/","Retail/Food maker","Yes (SAVR LLC)","2019-06-01"],["City Fish Co.","Food & grocery shops",1918,"Sourced","","1535 Pike Pl","Seattle","WA","Pike Place Market",47.6096,-122.3428,"Approximate","High","Began as the Municipal Fish Market.","","Retail","Yes (Seattle City Fish Corp)","2023-09-07"],["Tweedy & Popp Hardware","Hardware, home & garden",1920,"Sourced","","1815 N 45th St","Seattle","WA","Wallingford",47.6614,-122.3345,"Approximate","High","A local historian says 1920 or 1921. Moved in 2009 from 2108 N 45th St into the Wallingford Center.","https://www.wallyhood.org/2025/05/tweedy-and-popp-will-be-acknowledged-as-a-legacy-business-in-wallingford-at-the-wally-home-resource-fair/","Retail/Hardware","Yes (Hardware Right LLC, Suite 112)","2019-01-01"],["Lockspot Cafe","Restaurants",1925,"Approximate","c. 1920s","3005 NW Locks Pl","Seattle","WA","Ballard",47.6666,-122.3948,"Approximate","Low","Approximate date. Confirm the opening year.","https://visitseattle.org/food-drink/restaurants/old-school-seattle-restaurants/","Restaurant","Yes (Drink Inc)","2012-06-12"],["Mike's Chili Parlor","Restaurants",1922,"Sourced","","1447 NW Ballard Way","Seattle","WA","Ballard",47.6612,-122.3778,"Approximate","Medium","Celebrated 100 years in 2022; in its current building since 1939. Wikipedia prints the address as 447 NW Ballard Way, likely a typo; the city license file confirms 1447 and shows an active license in Nov 2026.","https://www.kuow.org/arts-life/2022-06-30/the-chili-dynasty-that-s-lasted-a-century","Restaurant/Bar","Yes (Mikes Chili Parlor Inc)","2008-07-01"],["Swansons Nursery","Hardware, home & garden",1924,"Approximate","","9701 15th Ave NW","Seattle","WA","Greenwood / Crown Hill",47.6998,-122.3762,"Approximate","Low","A 2024 TV segment said it had just finished its 100th year, so the opening year is about 1924: confirm. The city license file shows a licensee that began in 2018, so ownership has changed.","https://king5.com/article/entertainment/television/programs/evening/swansons-nursery-100-century-business-seattle-ballard-gardening-ciscoe-morris-rare-plants/281-e543165d-bf3d-4188-a79d-dcfa0e68872c","Retail/Nursery","Yes (Worldline Acquisition LLC)","2018-08-30"],["Uwajimaya","Food & grocery shops",1928,"Sourced","","600 5th Ave S","Seattle","WA","Chinatown-International District",47.598,-122.3268,"Approximate","Medium","Founded 1928 in Tacoma; the Seattle store opened in 1946.","https://www.seattlemet.com/eat-and-drink/2019/02/the-next-generation-puts-its-spin-on-iconic-c-id-businesses","Retail/Grocery","Yes (Uwajimaya Inc)","1965-11-01"],["Mecca Cafe","Restaurants",1930,"Sourced","","526 Queen Anne Ave N","Seattle","WA","Lower Queen Anne",47.6234,-122.3567,"Approximate","High","","","Diner/Bar","Yes (Queen Anne Diner LLC)","2019-09-15"],["Pike Place Fish Market","Food & grocery shops",1930,"Sourced","","86 Pike St","Seattle","WA","Pike Place Market",47.609,-122.3423,"Approximate","Medium","Earlier sources gave 86 Pike Pl; the city license file lists 86 Pike St, which is used here. Spot-check on a map before bulk geocoding.","","Retail","Yes (Pike Place Fish Market Inc, at 86 Pike St)","1978-06-01"],["Limback Lumber Co.","Hardware, home & garden",1930,"Sourced","","2600 NW Market St","Seattle","WA","Ballard",47.6683,-122.3899,"Approximate","High","Family-owned lumberyard, \"since 1930\" on its own site and in a 2013 Ballard News-Tribune story. Its site lists weekday hours only while a review listing shows Saturday hours, so call before visiting. Its site doesn't say outright that it sells to walk-in customers.","https://limbacklumber.com/","Retail/Lumberyard","Yes (Limback Lumber Co Inc)","1956-01-03"],["Husky Deli","Cafés & bakeries",1932,"Sourced","","4721 California Ave SW","Seattle","WA","West Seattle Junction",47.5604,-122.3869,"Approximate","Medium","Sources vary: 1932 to 1934. A move to 4747 California Ave SW was planned in 2018; not confirmed. The city license file still shows an active license at 4721 California Ave SW, so no move is on record.","https://seattle.gov/Documents/Departments/economicDevelopment/22820_Legacy_Report_2017-09-25.pdf","Deli/Ice cream","Yes (Husky Ice Cream Inc)","1980-04-01"],["Blue Moon Tavern","Bars & taverns",1934,"Sourced","","712 NE 45th St","Seattle","WA","U District",47.6612,-122.3224,"Approximate","High","","https://visitseattle.org/food-drink/restaurants/old-school-seattle-restaurants/","Bar","Yes (Three Fools Inc)","1985-10-01"],["Comet Tavern","Bars & taverns",1934,"Sourced","","922 E Pike St","Seattle","WA","Capitol Hill",47.6142,-122.3191,"Approximate","Medium","Opened 1934 as The Wee Dock and Dori; renamed the Comet in the 1950s. Ownership has changed several times, and Wikipedia notes a 2014 closure and reopening. Hours come from a January 2024 post: confirm.","https://thecomettavern.com/blog/2024/1/9/the-best-place-to-feel-the-classic-seattle-vibe","Bar","Yes (Pike Pine Diner LLC)","2015-08-24"],["Tai Tung","Restaurants",1935,"Sourced","","655 S King St","Seattle","WA","Chinatown-International District",47.5984,-122.3243,"Approximate","High","","https://www.seattlemet.com/eat-and-drink/2018/09/don-t-wait-to-dine-at-these-12-classic-seattle-restaurants","Restaurant","Yes (Tai Tung Inc)","1970-01-01"],["Spud Fish & Chips (Alki)","Restaurants",1935,"Sourced","","2666 Alki Ave SW","Seattle","WA","Alki",47.5771,-122.409,"Approximate","Medium","Sources say 1934 or 1935.","","Restaurant","Yes (Ivars Inc, as Alki Spuds)","2000-01-01"],["Ivar's Acres of Clams","Restaurants",1938,"Sourced","","1001 Alaskan Way","Seattle","WA","Waterfront",47.6035,-122.3394,"Approximate","Medium","Ivar's began in 1938; this restaurant opened in 1946. Pier 54.","","Restaurant","Yes (Ivars Inc)","1993-04-01"],["Chelan Cafe","Restaurants",1938,"Sourced","","3527 Chelan Ave SW","Seattle","WA","West Seattle (Delridge)",47.5715,-122.369,"Approximate","Medium","In business since 1938; the current owner's father bought it in 1974. A 2019 article said West Seattle light rail work could affect the site: confirm it is still open. Address is from a directory listing.","https://wahospitality.org/member-spotlight-chelan-cafe/","Restaurant","Yes (MSM Corp)","1996-07-01"],["Bill Pierre Ford","Auto dealers & parts",1941,"Minimum","","11525 Lake City Way NE","Seattle","WA","Lake City",47.7133,-122.292,"Approximate","Medium","New-car dealer. Year is the city license start (a lower bound), not a founding date. The same licensee holds a second license (from 1968) at 12531 30th Ave NE: confirm which site is the showroom.","","Retail/Auto dealer","Yes (Bill Pierre Ford Inc)","1941-01-01"],["Sosio's Fruit & Produce","Food & grocery shops",1943,"Sourced","","1527 Pike Pl","Seattle","WA","Pike Place Market",47.6095,-122.3427,"Approximate","High","","","Retail","Yes (Sosios Fruit & Produce Inc)","2003-01-01"],["DeLaurenti Food & Wine","Food & grocery shops",1946,"Sourced","","1435 1st Ave","Seattle","WA","Pike Place Market",47.6086,-122.3403,"Approximate","Medium","Founded 1946 per the Market's page. Address from the city license file; that account's start date (1973) is later than the founding.","https://www.pikeplacemarket.org/curated-with-care-shop-specialty-service-at-pike-place-market/","Retail/Grocery","Yes (De Laurenti Italian & Intl Foods Inc)","1973-04-01"],["Eclipse Hat Shop","Shops & specialty retail",1949,"Sourced","","1518 Western Ave","Seattle","WA","Pike Place Market area",47.6094,-122.3431,"Approximate","Medium","Founded 1949 in the Sanitary Market per the Market's page. Address from the city license file; the current licensee started in 2021, so ownership has changed.","https://www.pikeplacemarket.org/curated-with-care-shop-specialty-service-at-pike-place-market/","Retail/Hats","Yes (sole proprietor)","2021-01-05"],["Canlis","Restaurants",1950,"Sourced","","2576 Aurora Ave N","Seattle","WA","Queen Anne",47.6402,-122.3458,"Approximate","High","","https://www.seattlemet.com/eat-and-drink/2018/09/don-t-wait-to-dine-at-these-12-classic-seattle-restaurants","Restaurant","Yes (Canlis Inc)","1950-12-12"],["Metsker Maps","Shops & specialty retail",1950,"Sourced","","1511 1st Ave","Seattle","WA","Pike Place Market",47.6092,-122.3408,"Approximate","Medium","Seattle storefront since 1950; map publishing dates to 1901 in Tacoma.","","Retail","Yes (Anderson Map Company)","1999-08-01"],["Sloop Tavern","Bars & taverns",1952,"Sourced","","2830 NW Market St","Seattle","WA","Ballard",47.6684,-122.3927,"Approximate","Medium","One source says 1952, and a June 2023 article marked its 70th anniversary, so the year may be 1953. The property changed hands (2020 or 2022, sources differ) and the new owner extended the lease by at least four years. The city license file shows the current license (Cheers Too Inc) starting July 1999, so a pre-1977 license filter would have missed this bar.","https://scoundrelsfieldguide.com/?p=13864","Bar","Yes (Cheers Too Inc)","1999-07-08"],["Junction Hardware (True Value)","Hardware, home & garden",1953,"Sourced","","4747 44th Ave SW","Seattle","WA","West Seattle Junction",47.5607,-122.3855,"Approximate","High","Family-owned since it opened August 10, 1953 as Junction Hardware. Moved from California Ave SW to this address.","https://junctionhardware.com/about-us/","Retail/Hardware","Yes (Junction Hardware Inc)","1975-01-02"],["Dick's Drive-In (Wallingford)","Restaurants",1954,"Sourced","","111 NE 45th St","Seattle","WA","Wallingford",47.6613,-122.3287,"Approximate","High","The original Dick's.","","Restaurant","Yes (Dicks Drive Ins Ltd LP)","1991-08-01"],["Beth's Cafe","Restaurants",1954,"Sourced","","7311 Aurora Ave N","Seattle","WA","Phinney Ridge / Green Lake",47.6824,-122.3452,"Approximate","High","","https://www.seattlemet.com/eat-and-drink/2018/09/don-t-wait-to-dine-at-these-12-classic-seattle-restaurants","Diner","Yes (Beths Cafe LLC)","2024-01-01"],["Dick's Drive-In (Broadway)","Restaurants",1955,"Sourced","","115 Broadway E","Seattle","WA","Capitol Hill",47.6189,-122.3207,"Approximate","High","","","Restaurant","Yes (Dicks Drive Ins Ltd LP)","1991-08-01"],["REI","Shops & specialty retail",1956,"Minimum","","222 Yale Ave N","Seattle","WA","South Lake Union",47.6227,-122.3306,"Approximate","Medium","Year is the city license start (a lower bound). The co-op's own history likely gives an earlier founding year: confirm before relying on this row.","","Retail/Outdoor gear","Yes (Recreational Equipment Inc)","1956-05-01"],["Lowell's Restaurant & Bar","Restaurants",1957,"Sourced","","1519 Pike Pl","Seattle","WA","Pike Place Market",47.6094,-122.3426,"Approximate","Medium","Under this name since 1957. The site has been a restaurant since 1908 (as Manning's).","","Restaurant/Bar","Yes (sole proprietor)","1984-01-01"],["University VW Audi Seattle","Auto dealers & parts",1958,"Minimum","","4724 Roosevelt Way NE","Seattle","WA","U District",47.6631,-122.3175,"Approximate","Medium","New-car dealer. Year is the city license start (a lower bound), not a founding date.","","Retail/Auto dealer","Yes (Freeway Motors Inc)","1958-09-16"],["Jacks Auto Parts","Auto dealers & parts",1959,"Minimum","","9423 Martin Luther King Jr Way S","Seattle","WA","Rainier Beach",47.5227,-122.2692,"Approximate","Medium","Year is the city license start (a lower bound), not a founding date.","","Retail/Auto parts","Yes (Jacks Auto Parts Inc)","1959-06-01"],["Ben Bridge Jeweler","Shops & specialty retail",1959,"Minimum","","1530 5th Ave","Seattle","WA","Downtown",47.6113,-122.3355,"Approximate","Medium","Chain jeweler. Year is the city license start (a lower bound); the same account also lists 2901 3rd Ave.","","Retail/Jewelry","Yes (Ben Bridge Jeweler Inc)","1959-07-01"],["Dick's Drive-In (Holman Rd)","Restaurants",1960,"Sourced","","9208 Holman Rd NW","Seattle","WA","Northwest Seattle",47.6968,-122.3795,"Approximate","High","","","Restaurant","Yes (Dicks Drive Ins Ltd LP)","1991-08-01"],["Carter Volkswagen","Auto dealers & parts",1960,"Sourced","","5202 Leary Ave NW","Seattle","WA","Ballard",47.6662,-122.3805,"Approximate","Medium","Founded September 1960 and called Ballard's oldest auto dealer in a 2010 article. The city license file shows an active license in Nov 2026 (Carter Motors Inc, since Oct 10, 1960).","https://www.myballard.com/?p=24419","Retail/Auto dealer","Yes (Carter Motors Inc)","1960-10-10"],["DeLuxe Bar & Grill","Bars & taverns",1962,"Sourced","","625 Broadway E","Seattle","WA","Capitol Hill",47.6243,-122.3208,"Approximate","Medium","Its own site says \"A Capitol Hill Institution Since 1962\" but also says it began as a tavern at the close of Prohibition (about 1933); a grill was added in the late 1950s and the place was bought in the early 1960s. The site lists hours with no closure notice. A 2023 redevelopment proposal affects the site: confirm it is still open.","https://deluxebarandgrill.com","Bar/Restaurant","Yes (Deluxe Tavern & Restaurant No. 1 Inc)","1975-05-01"],["Shiga's","Shops & specialty retail",1962,"Minimum","","4306 University Way NE","Seattle","WA","U District",47.6601,-122.3131,"Approximate","Medium","Gift shop. Year is the city license start (a lower bound), not a founding date.","","Retail/Gifts","Yes (Shigas Inc)","1962-01-01"],["Northwest Art & Frame","Shops & specialty retail",1962,"Minimum","","4733 California Ave SW","Seattle","WA","West Seattle Junction",47.5607,-122.3869,"Approximate","Medium","Year is the city license start (a lower bound), not a founding date.","","Retail/Framing","Yes (Northwest Art & Frame)","1962-07-07"],["Dick's Drive-In (Lake City)","Restaurants",1963,"Sourced","","12325 30th Ave NE","Seattle","WA","Lake City",47.7192,-122.2968,"Approximate","High","","","Restaurant","Yes (Dicks Drive Ins Ltd LP)","1991-08-01"],["Ludi's Restaurant & Lounge","Restaurants",1963,"Minimum","","120 Stewart St","Seattle","WA","Downtown (near Pike Place Market)",47.6106,-122.3421,"Approximate","Medium","Listed at 120 Stewart St in a classic-restaurants guide; the city license file confirms the address. Year is the license start (a lower bound): the founding year is still unconfirmed.","https://www.theinfatuation.com/seattle/guides/classic-restaurants-seattle?ifsb=yes","Restaurant/Bar","Yes (Sports Center Inc)","1963-03-01"],["Perkins Glass & Mirror","Hardware, home & garden",1963,"Minimum","","2737 1st Ave S","Seattle","WA","SoDo",47.5748,-122.3343,"Approximate","Medium","Spent 53 years on Broadway on Capitol Hill, then moved in January 2025. The new address comes from the city license file. Year is the license start (a lower bound).","https://capitolhillseattle.com/2025/01/after-53-years-on-broadway-perkins-glass-moves-off-capitol-hill","Retail/Glass","Yes (Perkins Glass & Mirror Inc)","1963-09-01"],["Pande Cameron & Co","Hardware, home & garden",1964,"Minimum","","88 S Hudson St","Seattle","WA","SoDo",47.5598,-122.3345,"Approximate","Medium","Floor covering retailer. Year is the city license start (a lower bound), not a founding date.","","Retail/Flooring","Yes (Pande Cameron & Co of Sea Inc)","1964-08-01"],["Yen Wor Village","Restaurants",1965,"Minimum","","2300 California Ave SW","Seattle","WA","West Seattle (Admiral)",47.5828,-122.3857,"Approximate","Medium","Year is the city license start (a lower bound), not a founding date. Confirm it is open.","","Restaurant","Yes (Chin Corp)","1965-02-15"],["The Art Stall Gallery","Shops & specialty retail",1965,"Minimum","","97 Pike St","Seattle","WA","Pike Place Market",47.6089,-122.3418,"Approximate","Medium","Year is the city license start (a lower bound), not a founding date.","","Retail/Art gallery","Yes (The Art Stall Gallery)","1965-02-19"],["Tim & Iain's Barbershop","Repair & personal services",1966,"Sourced","","407 15th Ave E","Seattle","WA","Capitol Hill",47.6207,-122.3112,"Approximate","High","Founded 1966 by Jim Nicholson across the street; moved here in the 1980s. A third-generation owner took over in late 2025 and the shop takes walk-ins. It may be renamed.","https://www.capitolhillseattle.com/2025/11/a-new-era-at-tim-and-iains-as-a-capitol-hill-barbershops-third-generation-takes-over","Barber/Service","Yes (as Tims Barber Shop, sole proprietor)","2009-01-01"],["13 Coins","Restaurants",1967,"Sourced","","255 S King St","Seattle","WA","Pioneer Square",47.5985,-122.3322,"Approximate","High","Relocated in 2018 from South Lake Union.","https://www.seattlemet.com/eat-and-drink/2018/09/don-t-wait-to-dine-at-these-12-classic-seattle-restaurants","Restaurant","Yes (13 Coins Stadium LLC)","2017-10-01"],["Lummi Fisheries Supply","Shops & specialty retail",1967,"Sourced","","2225 W Commodore Way","Seattle","WA","Ballard / Salmon Bay",47.658,-122.3875,"Approximate","Medium","Founded 1967; owned by Trident Seafoods since 1980 (2011 article). Address and active license come from the city license file (current account since 1983, sporting-goods retail). The article put the retail door off Ballard Way: check which entrance serves the public.","https://www.westsideseattle.com/node/31721","Retail/Fishing gear","Yes (LFS Inc)","1983-05-01"],["Quest Bookshop (Theosophical Society)","Shops & specialty retail",1968,"Minimum","","717 Broadway E","Seattle","WA","Capitol Hill",47.6253,-122.3208,"Approximate","Medium","City permit records give 1968 (Capitol Hill Seattle, 2015) and the city license file agrees. Licensed to the Theosophical Society in Seattle. Confirm the shop's own founding year and hours.","https://capitolhillseattle.com/2015/11/the-50-oldest-businesses-in-district-3","Retail/Bookstore","Yes (Theosophical Society in Seattle)","1968-01-03"],["Taco Time (Elliott Ave W)","Restaurants",1968,"Minimum","","1140 Elliott Ave W","Seattle","WA","Interbay",47.6355,-122.3715,"Approximate","Low","Franchise location. Year is the city license start (a lower bound), not a founding date. Confirm it is open.","","Restaurant","Yes (Tacton Inc)","1968-07-01"],["Ivar's Salmon House","Restaurants",1969,"Sourced","","401 NE Northlake Way","Seattle","WA","Lake Union (Wallingford)",47.6514,-122.3268,"Approximate","Medium","HistoryLink dates the opening to 1969, followed by a six-month closure, so other sources may say 1970. Address is from the restaurant's site: confirm it is still open.","https://www.historylink.org/file/2514","Restaurant","Yes (Ivars Inc)","1994-01-01"],["Starbucks (original store)","Cafés & bakeries",1971,"Sourced","","1912 Pike Pl","Seattle","WA","Pike Place Market",47.6101,-122.3431,"Approximate","Medium","First store opened March 30, 1971 at 2000 Western Ave and spent about five years there before moving to this address.","https://en.wikipedia.org/wiki/Original_Starbucks","Cafe/Retail","Yes (Starbucks Corp, store 301)","1989-01-01"],["Sur La Table (Pike Place)","Shops & specialty retail",1972,"Sourced","","84 Pine St","Seattle","WA","Pike Place Market",47.6098,-122.3426,"Approximate","Medium","Chain store. Moved from about 80 Stewart St in 1980. The city license file shows an active license at 84 Pine St (SLT Lending SPV Inc, since 2020).","","Retail","Yes (SLT Lending SPV Inc)","2020-08-27"],["Ray's Boathouse","Restaurants",1973,"Sourced","","6049 Seaview Ave NW","Seattle","WA","Ballard / Shilshole",47.6757,-122.4068,"Approximate","High","Original building burned in 1987; open in 2026.","","Restaurant","Yes (Rays Boat House Inc)","1973-03-07"],["Left Bank Books","Shops & specialty retail",1973,"Sourced","","92 Pike St","Seattle","WA","Pike Place Market",47.6089,-122.342,"Approximate","High","Suite B.","","Retail","Yes (Left Bank Books Collective)","1999-01-01"],["Tenzing Momo","Shops & specialty retail",1973,"Sourced","","93 Pike St","Seattle","WA","Pike Place Market",47.609,-122.3419,"Approximate","High","","","Retail","Yes (Pike Place Tenzing Momo Inc)","1994-08-01"],["Elliott Bay Book Company","Shops & specialty retail",1973,"Sourced","","1521 10th Ave E","Seattle","WA","Capitol Hill",47.6141,-122.3187,"Approximate","High","Moved in 2010 from Pioneer Square. The city license file spells the street as 10th Ave E (licensed since 2000 to Elliott Bay Book Co LLC).","","Retail","Yes, at 1521 10th Ave E (Elliott Bay Book Co LLC)","2000-09-01"],["Indoor Sun Shoppe","Hardware, home & garden",1973,"Minimum","","160 N Canal St","Seattle","WA","Fremont",47.6493,-122.3512,"Approximate","Medium","Garden center per its license class. Year is the city license start (a lower bound), not a founding date.","","Retail/Garden supply","Yes (Indoor Sun Shoppe Corp)","1973-05-01"],["Assistance League Thrift Store","Shops & specialty retail",1973,"Minimum","","1415 N 45th St","Seattle","WA","Wallingford",47.6614,-122.3385,"Approximate","Medium","Thrift store licensed to the Assistance League of Seattle. Year is the city license start (a lower bound).","","Retail/Thrift","Yes (Assistance League of Seattle)","1973-10-01"],["Underwater Sports","Shops & specialty retail",1973,"Minimum","","10545 Aurora Ave N","Seattle","WA","Aurora / Northgate",47.7035,-122.3443,"Approximate","Low","Licensed under 'amusement and recreation', so confirm it operates as a walk-in store. Year is the city license start (a lower bound).","","Retail/Recreation","Yes (Underwater Sports Inc)","1973-04-01"],["Peter Miller","Shops & specialty retail",1973,"Minimum","","2326 2nd Ave","Seattle","WA","Belltown",47.6153,-122.344,"Approximate","Medium","Listed as a used-merchandise retailer. Year is the city license start (a lower bound), not a founding date.","","Retail","Yes (Peter Miller Inc)","1973-11-15"],["Dick's Drive-In (Queen Anne)","Restaurants",1974,"Sourced","","500 Queen Anne Ave N","Seattle","WA","Queen Anne",47.6231,-122.3567,"Approximate","High","","","Restaurant","Yes (Dicks Drive Ins Ltd LP)","1991-08-01"],["Eastlake Zoo","Bars & taverns",1974,"Minimum","","2301 Eastlake Ave E","Seattle","WA","Eastlake",47.6385,-122.3256,"Approximate","Medium","Tavern. Year is the city license start (a lower bound), not a founding date.","","Bar","Yes (I G T Inc)","1974-05-13"],["Magic Mouse Toys","Shops & specialty retail",1974,"Minimum","","603 1st Ave","Seattle","WA","Pioneer Square",47.6021,-122.3346,"Approximate","Medium","Year is the city license start (a lower bound), not a founding date.","","Retail/Toys","Yes (Yellow Parachutes Inc)","1974-08-22"],["Pirates Plunder","Restaurants",1974,"Minimum","","1301 Alaskan Way","Seattle","WA","Waterfront",47.6055,-122.3412,"Approximate","Low","Listed as a limited-service restaurant. Confirm it is open and what it sells. Year is the city license start (a lower bound).","","Restaurant/Retail","Yes (Great Western Pacific Inc)","1974-04-01"],["Allegro Espresso","Cafés & bakeries",1975,"Minimum","","4214 University Way NE","Seattle","WA","U District",47.6592,-122.3131,"Approximate","Medium","Year is the city license start (a lower bound), not a founding date.","","Cafe","Yes (Espresso Inc)","1975-04-17"],["Burgermaster","Restaurants",1975,"Minimum","","3040 NE 45th St","Seattle","WA","Laurelhurst",47.6612,-122.2918,"Approximate","Medium","Year is the city license start (a lower bound); the brand may be older: confirm.","","Restaurant","Yes (Marles Inc)","1975-10-01"],["Pike & Western Wine Shop","Food & grocery shops",1975,"Minimum","","1934 Pike Pl","Seattle","WA","Pike Place Market area",47.6106,-122.3436,"Approximate","Medium","Listed as a beer, wine and liquor retailer. Year is the city license start (a lower bound).","","Retail/Wine","Yes (Pike & Western Co)","1975-07-16"],["Albert Lee Furniture & Appliance","Hardware, home & garden",1975,"Minimum","","1476 Elliott Ave W","Seattle","WA","Interbay",47.639,-122.374,"Approximate","Medium","Year is the city license start (a lower bound), not a founding date.","","Retail/Appliances","Yes (Albert Lee Inc)","1975-03-01"],["Copacabana Cafe","Restaurants",1975,"Minimum","","1520 1/2 Pike Pl","Seattle","WA","Pike Place Market",47.6095,-122.3428,"Approximate","Low","The license is held by a general partnership and may reflect an earlier owner of the space. Confirm the cafe's opening year.","","Restaurant","Yes (general partnership)","1975-02-15"],["La Vassar Florists","Shops & specialty retail",1976,"Minimum","","7530 20th Ave NE","Seattle","WA","Ravenna",47.6838,-122.3052,"Approximate","Medium","Year is the city license start (a lower bound), not a founding date.","","Retail/Florist","Yes (La Vassar Florists Inc)","1976-09-01"],["La Palma","Restaurants",1976,"Minimum","","3456 15th Ave W","Seattle","WA","Interbay",47.6501,-122.3765,"Approximate","Medium","Year is the city license start (a lower bound), not a founding date.","","Restaurant","Yes (corporation)","1976-07-01"],["Wright Bros. Cycle Works","Repair & personal services",1976,"Minimum","","219 N 36th St","Seattle","WA","Fremont",47.6515,-122.3509,"Approximate","Medium","Listed as a repair shop. Year is the city license start (a lower bound), not a founding date.","","Retail/Bike repair","Yes (sole proprietor)","1976-08-01"],["Sully's Snowgoose Saloon","Bars & taverns","","Unclear","Unclear","6119 Phinney Ave N","Seattle","WA","Phinney Ridge",47.6733,-122.3545,"Approximate","Low","Building dates to 1924/1934. Verify when the bar itself was founded.","","Bar","Yes (Sullys Ale House LLC)","1996-12-06"]]},"National Register":{"labels":["Name","Type","Year","Year basis","Year label","Address","City","State","Neighborhood","Latitude","Longitude","Position","Confidence","Notes","Source link","NRHP reference #","Date listed"],"rows":[["12th Avenue South Bridge (Jose Rizal Bridge)","Bridges & other structures",1982,"Sourced","","12th Ave S over Dearborn St","Seattle","WA","",47.596111,-122.316111,"","High","Built 1911; the state’s oldest surviving steel arch bridge. Renamed the Jose Rizal Bridge in 1974.","https://en.wikipedia.org/wiki/National_Register_of_Historic_Places_listings_in_Seattle","82004227","1982-07-16"],["1411 Fourth Avenue Building","Commercial & office",1991,"Sourced","","1411 4th Ave","Seattle","WA","",47.609444,-122.335,"Approximate","High","","https://en.wikipedia.org/wiki/National_Register_of_Historic_Places_listings_in_Seattle","91000633","1991-05-28"],["1600 East John Street Apartments","Hotels & apartments",2013,"Sourced","","1600 E John St","Seattle","WA","",47.619926,-122.31102,"Approximate","High","","https://en.wikipedia.org/wiki/National_Register_of_Historic_Places_listings_in_Seattle","13000278","2013-05-14"],["1926 Model Brick Home","Houses",2016,"Sourced","","2600 E Montlake Pl","Seattle","WA","",47.64328,-122.302962,"Approximate","High","","https://en.wikipedia.org/wiki/National_Register_of_Historic_Places_listings_in_Seattle","16000829","2016-12-06"],["Admiral Theater","Theaters, clubs & halls",1989,"Sourced","","2343 California Ave SW","Seattle","WA","",47.58276,-122.38646,"Approximate","High","","https://en.wikipedia.org/wiki/National_Register_of_Historic_Places_listings_in_Seattle","89002098","1989-12-11"],["Admiral's House, 13th Naval District","Houses",2013,"Sourced","","2001 W Garfield St","Seattle","WA","",47.632111,-122.388621,"Approximate","High","","https://en.wikipedia.org/wiki/National_Register_of_Historic_Places_listings_in_Seattle","13000016","2013-02-13"],["Agen Warehouse","Industrial & transportation",1998,"Sourced","","1201 Western Ave","Seattle","WA","",47.605833,-122.3375,"Approximate","High","","https://en.wikipedia.org/wiki/National_Register_of_Historic_Places_listings_in_Seattle","97001673","1998-01-23"],["Alaska Trade Building","Commercial & office",1971,"Sourced","","1915-1919 1st Ave","Seattle","WA","",47.6108,-122.3411,"Approximate","High","","https://en.wikipedia.org/wiki/National_Register_of_Historic_Places_listings_in_Seattle","71000871","1971-05-06"],["John B. Allen School","Schools & libraries",2011,"Sourced","","6532 Phinney Ave N","Seattle","WA","",47.6772,-122.3539,"Approximate","High","","https://en.wikipedia.org/wiki/National_Register_of_Historic_Places_listings_in_Seattle","11000280","2011-05-11"],["Arboretum Sewer Trestle","Bridges & other structures",1982,"Sourced","","Crosses 26th Ave E between Roanoke and E Miller St","Seattle","WA","",47.6425,-122.2978,"","High","Built 1910; an early reinforced-concrete arch sewer viaduct, now a pedestrian bridge in the Arboretum.","https://en.wikipedia.org/wiki/National_Register_of_Historic_Places_listings_in_Seattle","82004229","1982-07-16"],["Arctic Building","Commercial & office",1978,"Sourced","","306 Cherry St","Seattle","WA","",47.6039,-122.3306,"Approximate","High","","https://en.wikipedia.org/wiki/National_Register_of_Historic_Places_listings_in_Seattle","78002749","1978-11-28"],["Alfredo & Susan Lytle Arreguin House and Studio","Houses",2022,"Sourced","","2412 NE 80th St","Seattle","WA","",47.6868,-122.3013,"Approximate","High","","https://en.wikipedia.org/wiki/National_Register_of_Historic_Places_listings_in_Seattle","100007697","2022-05-09"],["Assay Office/German House","Government & civic",1972,"Sourced","","613 9th Ave","Seattle","WA","",47.6061,-122.3236,"Approximate","High","","https://en.wikipedia.org/wiki/National_Register_of_Historic_Places_listings_in_Seattle","72001271","1972-03-16"],["Aurora Avenue Bridge","Bridges & other structures",1982,"Sourced","","Aurora Ave N over the Lake Washington Ship Canal","Seattle","WA","",47.6528,-122.3461,"","High","Built 1931; cantilever truss bridge carrying State Route 99 over the west end of Lake Union.","https://en.wikipedia.org/wiki/National_Register_of_Historic_Places_listings_in_Seattle","82004230","1982-07-16"],["Ballard Avenue Historic District","Historic districts",1976,"Sourced","","Ballard Ave from NW Market St to NW Dock St","Seattle","WA","",47.6664,-122.3819,"","High","A district: the pin marks its approximate center.","https://en.wikipedia.org/wiki/National_Register_of_Historic_Places_listings_in_Seattle","76001885","1976-07-01"],["Ballard Bridge","Bridges & other structures",1982,"Sourced","","Spans the Lake Washington Ship Canal","Seattle","WA","",47.6631,-122.375,"","High","Built 1917; one of the state’s oldest double-leaf bascule bridges, linking Ballard with Queen Anne and Magnolia.","https://en.wikipedia.org/wiki/National_Register_of_Historic_Places_listings_in_Seattle","82004231","1982-07-16"],["Ballard Carnegie Library","Schools & libraries",1979,"Sourced","","2026 NW Market St","Seattle","WA","",47.6689,-122.3817,"Approximate","High","Listed under the Carnegie Libraries of Washington multiple-resource listing.","https://en.wikipedia.org/wiki/National_Register_of_Historic_Places_listings_in_Seattle","79002535","1979-06-15"],["Ballard-Howe House","Houses",1979,"Sourced","","22 W Highland Dr","Seattle","WA","",47.63,-122.3564,"Approximate","High","","https://en.wikipedia.org/wiki/National_Register_of_Historic_Places_listings_in_Seattle","79002536","1979-03-26"],["Ballast Island","Parks, sites & monuments",2021,"Sourced","","Foot of S Washington and S Main Sts, along the waterfront","Seattle","WA","",47.6005,-122.3365,"","High","","https://en.wikipedia.org/wiki/National_Register_of_Historic_Places_listings_in_Seattle","100006067","2021-01-27"],["Richard A. Ballinger House","Houses",1976,"Sourced","","1733 39th Ave","Seattle","WA","",47.6178,-122.2822,"Approximate","High","","https://en.wikipedia.org/wiki/National_Register_of_Historic_Places_listings_in_Seattle","76001886","1976-05-28"],["Julian and Marajane Barksdale House","Houses",2013,"Sourced","","13226 42nd Ave NE","Seattle","WA","",47.7238,-122.2805,"Approximate","High","","https://en.wikipedia.org/wiki/National_Register_of_Historic_Places_listings_in_Seattle","13000995","2013-12-24"],["Barnes Building","Commercial & office",1975,"Sourced","","2320-2322 1st Ave","Seattle","WA","",47.613611,-122.345,"Approximate","High","","https://en.wikipedia.org/wiki/National_Register_of_Historic_Places_listings_in_Seattle","75001853","1975-02-24"],["Bay View Brewery","Industrial & transportation",2013,"Sourced","","3100-3222 Airport Way S","Seattle","WA","",47.576193,-122.320772,"Approximate","High","","https://en.wikipedia.org/wiki/National_Register_of_Historic_Places_listings_in_Seattle","12001221","2013-01-23"],["Beacon Hill School","Schools & libraries",2019,"Sourced","","2524 16th Ave S","Seattle","WA","",47.5805,-122.3121,"Approximate","High","","https://en.wikipedia.org/wiki/National_Register_of_Historic_Places_listings_in_Seattle","100004297","2019-08-14"],["Bell Apartments","Hotels & apartments",1974,"Sourced","","2326 1st Ave","Seattle","WA","",47.614167,-122.345556,"Approximate","High","","https://en.wikipedia.org/wiki/National_Register_of_Historic_Places_listings_in_Seattle","74001957","1974-07-12"],["William and Minna Bloch House","Houses",2025,"Sourced","","1439 E Prospect St","Seattle","WA","",47.6284,-122.3129,"Approximate","High","","https://en.wikipedia.org/wiki/National_Register_of_Historic_Places_listings_in_Seattle","100012443","2025-12-29"],["Jesse C. Bowles House","Houses",1986,"Sourced","","2540 Shoreland Dr S","Seattle","WA","",47.580833,-122.283889,"Approximate","High","","https://en.wikipedia.org/wiki/National_Register_of_Historic_Places_listings_in_Seattle","86003162","1986-11-06"],["Building No. 105, Boeing Airplane Company","Industrial & transportation",1971,"Sourced","","9404 E Marginal Way S","Seattle","WA","",47.518333,-122.295,"Approximate","Medium","Preserved as part of the Museum of Flight. The register lists the location only as “Purcell Ave.”; the address shown is the museum’s.","https://en.wikipedia.org/wiki/National_Register_of_Historic_Places_listings_in_Seattle","71000872","1971-08-26"],["Bon Marche Department Store","Commercial & office",2016,"Sourced","","300 Pine St","Seattle","WA","",47.611107,-122.338433,"Approximate","High","Now Macy’s; former flagship store of The Bon Marché.","https://en.wikipedia.org/wiki/National_Register_of_Historic_Places_listings_in_Seattle","16000830","2016-12-06"],["Butterworth Building","Commercial & office",1971,"Sourced","","1921 1st Ave","Seattle","WA","",47.610833,-122.341111,"Approximate","High","","https://en.wikipedia.org/wiki/National_Register_of_Historic_Places_listings_in_Seattle","71000873","1971-05-14"],["Calhoun Hotel","Hotels & apartments",2013,"Sourced","","2000 2nd Ave","Seattle","WA","",47.612054,-122.341664,"Approximate","High","","https://en.wikipedia.org/wiki/National_Register_of_Historic_Places_listings_in_Seattle","13000208","2013-04-23"],["Cambridge Apartments","Hotels & apartments",2016,"Sourced","","903 Union St","Seattle","WA","",47.611561,-122.329868,"Approximate","High","","https://en.wikipedia.org/wiki/National_Register_of_Historic_Places_listings_in_Seattle","16000148","2016-04-05"],["Camlin Hotel","Hotels & apartments",1999,"Sourced","","1619 9th Ave","Seattle","WA","",47.610833,-122.331944,"Approximate","High","","https://en.wikipedia.org/wiki/National_Register_of_Historic_Places_listings_in_Seattle","99000405","1999-03-25"],["Century 21-Washington State Coliseum","Theaters, clubs & halls",2018,"Sourced","","305 Harrison St","Seattle","WA","",47.6221,-122.3541,"Approximate","High","Now Climate Pledge Arena.","https://en.wikipedia.org/wiki/National_Register_of_Historic_Places_listings_in_Seattle","100002406","2018-05-10"],["Chelsea Family Hotel","Hotels & apartments",1978,"Sourced","","620 W Olympic Pl","Seattle","WA","",47.628056,-122.364722,"Approximate","High","","https://en.wikipedia.org/wiki/National_Register_of_Historic_Places_listings_in_Seattle","78002750","1978-12-14"],["James and Pat Chiarelli House","Houses",2013,"Sourced","","843 NE 100th St","Seattle","WA","",47.701122,-122.318635,"Approximate","High","","https://en.wikipedia.org/wiki/National_Register_of_Historic_Places_listings_in_Seattle","13000279","2013-05-14"],["Chief Sealth High School","Schools & libraries",2022,"Sourced","","2600 SW Thistle St","Seattle","WA","",47.5296,-122.36716,"Approximate","High","","https://en.wikipedia.org/wiki/National_Register_of_Historic_Places_listings_in_Seattle","100008187","2022-09-14"],["Chinese Baptist Church","Churches & temples",1986,"Sourced","","925 S King St","Seattle","WA","",47.598333,-122.318611,"Approximate","High","","https://en.wikipedia.org/wiki/National_Register_of_Historic_Places_listings_in_Seattle","86002094","1986-07-31"],["Chittenden Locks and Lake Washington Ship Canal","Bridges & other structures",1978,"Sourced","","Salmon Bay (Ballard Locks, 3015 NW 54th St)","Seattle","WA","",47.6658,-122.3977,"","Medium","The listing covers the locks and the whole ship canal. The pin is placed at the locks; the published coordinates fell on the canal near Fremont.","https://en.wikipedia.org/wiki/National_Register_of_Historic_Places_listings_in_Seattle","78002751","1978-12-14"],["Church of the Blessed Sacrament, Priory, and School","Churches & temples",1984,"Sourced","","5040-5041 9th Ave NE","Seattle","WA","",47.666667,-122.3175,"Approximate","High","","https://en.wikipedia.org/wiki/National_Register_of_Historic_Places_listings_in_Seattle","84003479","1984-01-12"],["Cobb Building","Commercial & office",1984,"Sourced","","1301-1309 4th Ave","Seattle","WA","",47.6087,-122.3339,"Approximate","Medium","Map position corrected by hand: the published latitude was about a kilometer north of the address.","https://en.wikipedia.org/wiki/National_Register_of_Historic_Places_listings_in_Seattle","84003485","1984-08-03"],["Coliseum Theater","Theaters, clubs & halls",1975,"Sourced","","5th Ave and Pike St","Seattle","WA","",47.611389,-122.333889,"Approximate","High","","https://en.wikipedia.org/wiki/National_Register_of_Historic_Places_listings_in_Seattle","75001854","1975-07-07"],["Colman Automotive Building","Commercial & office",2013,"Sourced","","401 E Pine St","Seattle","WA","",47.615081,-122.326532,"Approximate","High","","https://en.wikipedia.org/wiki/National_Register_of_Historic_Places_listings_in_Seattle","13000017","2013-02-13"],["Colman Building","Commercial & office",1972,"Sourced","","811 1st Ave","Seattle","WA","",47.603889,-122.334167,"Approximate","High","","https://en.wikipedia.org/wiki/National_Register_of_Historic_Places_listings_in_Seattle","72001272","1972-03-16"],["Colman Park & Dose Terrace Stairs","Parks, sites & monuments",2020,"Sourced","","Roughly bounded by S Massachusetts St, S Dose Terrace, 31st Ave S and the Lake Washington shoreline","Seattle","WA","",47.5835,-122.2883,"","High","","https://en.wikipedia.org/wiki/National_Register_of_Historic_Places_listings_in_Seattle","100004959","2020-02-10"],["Colonial Hotel","Hotels & apartments",1982,"Sourced","","1119-1123 1st Ave","Seattle","WA","",47.606111,-122.336389,"Approximate","High","","https://en.wikipedia.org/wiki/National_Register_of_Historic_Places_listings_in_Seattle","82004232","1982-04-29"],["Colonnade Hotel","Hotels & apartments",2017,"Sourced","","107 Pine St","Seattle","WA","",47.60982,-122.340469,"Approximate","High","","https://en.wikipedia.org/wiki/National_Register_of_Historic_Places_listings_in_Seattle","100001443","2017-08-07"],["Columbia City Historic District","Historic districts",1980,"Sourced","","Roughly bounded by S Hudson and S Alaska Sts, 35th and Rainier Aves","Seattle","WA","",47.559167,-122.285556,"","High","A district: the pin marks its approximate center.","https://en.wikipedia.org/wiki/National_Register_of_Historic_Places_listings_in_Seattle","80004000","1980-09-08"],["Continental Hotel","Hotels & apartments",2024,"Sourced","","315 Seneca St","Seattle","WA","",47.6073,-122.3346,"Approximate","High","","https://en.wikipedia.org/wiki/National_Register_of_Historic_Places_listings_in_Seattle","100010525","2024-07-08"],["Frank B. Cooper Elementary School","Schools & libraries",2003,"Sourced","","4408 Delridge Way SW","Seattle","WA","",47.563611,-122.361389,"Approximate","High","","https://en.wikipedia.org/wiki/National_Register_of_Historic_Places_listings_in_Seattle","03000161","2003-03-26"],["Cornish School","Schools & libraries",1977,"Sourced","","710 E Roy St","Seattle","WA","",47.625556,-122.321944,"Approximate","High","","https://en.wikipedia.org/wiki/National_Register_of_Historic_Places_listings_in_Seattle","77001337","1977-08-29"],["Cowen Park Bridge","Bridges & other structures",1982,"Sourced","","15th Ave NE (Cowen Park)","Seattle","WA","",47.671111,-122.3125,"","High","Built in 1936 by the WPA; an Art Deco concrete arch bridge spanning a ravine in Cowen Park.","https://en.wikipedia.org/wiki/National_Register_of_Historic_Places_listings_in_Seattle","82004233","1982-07-16"],["Daughters of the American Revolution-Rainier Chapter House","Theaters, clubs & halls",2019,"Sourced","","800 E Roy St","Seattle","WA","",47.6251,-122.3221,"Approximate","High","","https://en.wikipedia.org/wiki/National_Register_of_Historic_Places_listings_in_Seattle","100003525","2019-03-20"],["De La Mar Apartments","Hotels & apartments",1980,"Sourced","","115 W Olympic Pl","Seattle","WA","",47.626667,-122.357778,"Approximate","High","","https://en.wikipedia.org/wiki/National_Register_of_Historic_Places_listings_in_Seattle","80004001","1980-08-18"],["Henry H. Dearborn House","Houses",1998,"Sourced","","1117 Minor Ave","Seattle","WA","",47.611111,-122.324167,"Approximate","High","","https://en.wikipedia.org/wiki/National_Register_of_Historic_Places_listings_in_Seattle","97001672","1998-01-23"],["Charles P. and Ida Dose House","Houses",2013,"Sourced","","2121 31st Ave S","Seattle","WA","",47.583787,-122.293394,"Approximate","High","","https://en.wikipedia.org/wiki/National_Register_of_Historic_Places_listings_in_Seattle","13000996","2013-12-24"],["Dunn Gardens","Parks, sites & monuments",1994,"Sourced","","13533 Northshire Rd NW","Seattle","WA","",47.7275,-122.363889,"Approximate","High","","https://en.wikipedia.org/wiki/National_Register_of_Historic_Places_listings_in_Seattle","94001435","1994-12-15"],["Duwamish (fireboat)","Ships & boats",1989,"Sourced","","Historic Ships Wharf, Lake Union Park","Seattle","WA","",47.62818,-122.33652,"","High","Vessels move; the pin shows the berth given in the National Register listing.","https://en.wikipedia.org/wiki/National_Register_of_Historic_Places_listings_in_Seattle","89001448","1989-06-30"],["Duwamish Number 1 Site","Parks, sites & monuments",1977,"Sourced","","","Seattle","WA","","","","","High","The National Park Service withholds the location of this archaeological site, so it has no map position.","https://en.wikipedia.org/wiki/National_Register_of_Historic_Places_listings_in_Seattle","77001338","1977-10-18"],["Eagles Auditorium Building","Theaters, clubs & halls",1983,"Sourced","","1416 7th Ave","Seattle","WA","",47.611111,-122.330833,"Approximate","High","","https://en.wikipedia.org/wiki/National_Register_of_Historic_Places_listings_in_Seattle","83003338","1983-07-14"],["El Rio Apartment Hotel","Hotels & apartments",1999,"Sourced","","1922-1928 9th Ave","Seattle","WA","",47.616389,-122.333611,"Approximate","High","","https://en.wikipedia.org/wiki/National_Register_of_Historic_Places_listings_in_Seattle","99001453","1999-11-30"],["Ellsworth Storey Cottages Historic District","Historic districts",1976,"Sourced","","1706-1816 S Lake Washington Blvd and 1725-1729 S 36th Ave","Seattle","WA","",47.5875,-122.288056,"","High","A district: the pin marks its approximate center.","https://en.wikipedia.org/wiki/National_Register_of_Historic_Places_listings_in_Seattle","76001891","1976-07-06"],["Ellsworth Storey Residences","Houses",1972,"Sourced","","260 and 270 E Dorffel Dr","Seattle","WA","",47.621667,-122.285278,"Approximate","High","","https://en.wikipedia.org/wiki/National_Register_of_Historic_Places_listings_in_Seattle","72001276","1972-04-14"],["Jim and Betty Eng House","Houses",2019,"Sourced","","8310 Beacon Ave S","Seattle","WA","",47.5293,-122.2878,"Approximate","High","","https://en.wikipedia.org/wiki/National_Register_of_Historic_Places_listings_in_Seattle","100004460","2019-09-30"],["Suen King and Sue Fong Eng House","Houses",2026,"Sourced","","611 8th Ave S","Seattle","WA","",47.5971,-122.3226,"Approximate","High","","https://en.wikipedia.org/wiki/National_Register_of_Historic_Places_listings_in_Seattle","100013175","2026-06-22"],["Federal Office Building (909 1st Ave)","Government & civic",1979,"Sourced","","909 1st Ave","Seattle","WA","",47.604444,-122.335,"Approximate","High","Former federal office building, constructed in 1933.","https://en.wikipedia.org/wiki/National_Register_of_Historic_Places_listings_in_Seattle","79003155","1979-04-30"],["Federal Office Building (Henry M. Jackson Federal Building)","Government & civic",2024,"Sourced","","915 2nd Ave","Seattle","WA","",47.6044,-122.3354,"Approximate","High","Built 1975–76.","https://en.wikipedia.org/wiki/National_Register_of_Historic_Places_listings_in_Seattle","100010918","2024-10-17"],["Federal Reserve Bank of San Francisco, Seattle Branch","Government & civic",2013,"Sourced","","1015 2nd Ave","Seattle","WA","",47.605382,-122.335793,"Approximate","High","","https://en.wikipedia.org/wiki/National_Register_of_Historic_Places_listings_in_Seattle","11000985","2013-02-04"],["Pierre P. Ferry House","Houses",1979,"Sourced","","1531 10th Ave E","Seattle","WA","",47.634167,-122.318889,"Approximate","High","","https://en.wikipedia.org/wiki/National_Register_of_Historic_Places_listings_in_Seattle","79002537","1979-04-18"],["Fir Lodge","Houses",2021,"Sourced","","2717 61st Ave SW","Seattle","WA","",47.5785,-122.4113,"Approximate","High","","https://en.wikipedia.org/wiki/National_Register_of_Historic_Places_listings_in_Seattle","100006070","2021-01-22"],["Fire Station No. 18","Government & civic",1973,"Sourced","","5427 Russell Ave NW","Seattle","WA","",47.668611,-122.381667,"Approximate","High","","https://en.wikipedia.org/wiki/National_Register_of_Historic_Places_listings_in_Seattle","73001876","1973-06-19"],["Fire Station No. 23","Government & civic",1971,"Sourced","","18th Ave and E Columbia St","Seattle","WA","",47.608889,-122.307222,"Approximate","High","","https://en.wikipedia.org/wiki/National_Register_of_Historic_Places_listings_in_Seattle","71000874","1971-09-10"],["Fire Station No. 25","Government & civic",1972,"Sourced","","1400 Harvard Ave","Seattle","WA","",47.613611,-122.320833,"Approximate","High","","https://en.wikipedia.org/wiki/National_Register_of_Historic_Places_listings_in_Seattle","72001273","1972-04-14"],["First Methodist Episcopal Church","Churches & temples",2011,"Sourced","","801 5th Ave","Seattle","WA","",47.605556,-122.331389,"Approximate","High","","https://en.wikipedia.org/wiki/National_Register_of_Historic_Places_listings_in_Seattle","10001105","2011-01-03"],["First Methodist Protestant Church of Seattle","Churches & temples",1993,"Sourced","","128 16th Ave E","Seattle","WA","",47.619722,-122.310278,"Approximate","High","","https://en.wikipedia.org/wiki/National_Register_of_Historic_Places_listings_in_Seattle","93000364","1993-05-14"],["Ford Motor Company Assembly Plant","Industrial & transportation",2013,"Sourced","","4735 E Marginal Way S","Seattle","WA","",47.558131,-122.340353,"Approximate","High","","https://en.wikipedia.org/wiki/National_Register_of_Historic_Places_listings_in_Seattle","13000823","2013-10-09"],["Fort Lawton","Historic districts",1978,"Sourced","","On Magnolia Bluff (Discovery Park)","Seattle","WA","",47.659167,-122.413611,"","High","A district: the pin marks its approximate center.","https://en.wikipedia.org/wiki/National_Register_of_Historic_Places_listings_in_Seattle","78002752","1978-08-15"],["Fourth Church of Christ, Scientist","Churches & temples",2013,"Sourced","","1119 8th Ave","Seattle","WA","",47.60907,-122.32995,"Approximate","High","","https://en.wikipedia.org/wiki/National_Register_of_Historic_Places_listings_in_Seattle","12001138","2013-01-02"],["Freeway Park","Parks, sites & monuments",2019,"Sourced","","700 Seneca St","Seattle","WA","",47.6097,-122.3311,"Approximate","High","","https://en.wikipedia.org/wiki/National_Register_of_Historic_Places_listings_in_Seattle","100004789","2019-12-19"],["Fremont Bridge","Bridges & other structures",1982,"Sourced","","Spans the Lake Washington Ship Canal","Seattle","WA","",47.647778,-122.348611,"","High","Part of the Historic Bridges and Tunnels in Washington thematic listing.","https://en.wikipedia.org/wiki/National_Register_of_Historic_Places_listings_in_Seattle","82004234","1982-07-16"],["Fremont Building","Commercial & office",1992,"Sourced","","3419 Fremont Ave N","Seattle","WA","",47.650278,-122.349444,"Approximate","High","","https://en.wikipedia.org/wiki/National_Register_of_Historic_Places_listings_in_Seattle","92001587","1992-11-12"],["Frink Park","Parks, sites & monuments",2019,"Sourced","","Roughly bounded by 31st Ave S, Lake Washington Blvd, 34th Ave S, S King St and S Main St","Seattle","WA","",47.5993,-122.2907,"","High","","https://en.wikipedia.org/wiki/National_Register_of_Historic_Places_listings_in_Seattle","100004646","2019-11-20"],["Caroline Kline Galland House","Houses",1980,"Sourced","","1605 17th Ave","Seattle","WA","",47.615833,-122.309444,"Approximate","High","","https://en.wikipedia.org/wiki/National_Register_of_Historic_Places_listings_in_Seattle","80004002","1980-02-08"],["Gas Works Park","Parks, sites & monuments",2013,"Sourced","","2000 N Northlake Way","Seattle","WA","",47.646,-122.335,"Approximate","High","Added in 2013, over a decade after it was nominated.","https://en.wikipedia.org/wiki/National_Register_of_Historic_Places_listings_in_Seattle","02000862","2013-01-02"],["Georgetown Steam Plant","Industrial & transportation",1978,"Sourced","","6605 13th Ave S","Seattle","WA","",47.543056,-122.315,"Approximate","Medium","The register lists only the year (1978) and the location “Off WA 99 at King County Airport”; the street address shown is the plant’s.","https://en.wikipedia.org/wiki/National_Register_of_Historic_Places_listings_in_Seattle","78002755","1978"],["Globe Building, Beebe Building and Hotel Cecil","Commercial & office",1982,"Sourced","","1001-1023 1st Ave","Seattle","WA","",47.605278,-122.335556,"Approximate","High","","https://en.wikipedia.org/wiki/National_Register_of_Historic_Places_listings_in_Seattle","82004235","1982-04-29"],["J. S. Graham Store","Commercial & office",1989,"Sourced","","119 Pine St","Seattle","WA","",47.61,-122.338611,"Approximate","High","","https://en.wikipedia.org/wiki/National_Register_of_Historic_Places_listings_in_Seattle","89002094","1989-12-07"],["Grand Pacific Hotel","Hotels & apartments",1982,"Sourced","","1115-1117 1st Ave","Seattle","WA","",47.605833,-122.336111,"Approximate","High","Originally known as the Starr Block.","https://en.wikipedia.org/wiki/National_Register_of_Historic_Places_listings_in_Seattle","82004236","1982-05-13"],["Guiry and Schillestad Building","Commercial & office",1985,"Sourced","","2101-2111 1st Ave","Seattle","WA","",47.612222,-122.343056,"Approximate","High","","https://en.wikipedia.org/wiki/National_Register_of_Historic_Places_listings_in_Seattle","85001941","1985-08-28"],["Harvard-Belmont District","Historic districts",1982,"Sourced","","Bellevue Pl, Broadway, Boylston and Harvard Aves","Seattle","WA","",47.628611,-122.321944,"","High","A district: the pin marks its approximate center.","https://en.wikipedia.org/wiki/National_Register_of_Historic_Places_listings_in_Seattle","82004237","1982-05-13"],["Hawthorne Square","Hotels & apartments",2012,"Sourced","","4800 Fremont Ave N","Seattle","WA","",47.663971,-122.349268,"Approximate","High","Part of the Seattle Apartment Buildings, 1900–1957 multiple property submission.","https://en.wikipedia.org/wiki/National_Register_of_Historic_Places_listings_in_Seattle","08001301","2012-08-14"],["Highland Apartments","Hotels & apartments",2018,"Sourced","","931 11th Ave E","Seattle","WA","",47.6277,-122.3181,"Approximate","High","","https://en.wikipedia.org/wiki/National_Register_of_Historic_Places_listings_in_Seattle","100003254","2018-12-07"],["Samuel Hill House","Houses",1976,"Sourced","","814 E Highland Dr","Seattle","WA","",47.630833,-122.320556,"Approximate","High","","https://en.wikipedia.org/wiki/National_Register_of_Historic_Places_listings_in_Seattle","76001887","1976-05-03"],["Hoge Building","Commercial & office",1983,"Sourced","","705 2nd Ave","Seattle","WA","",47.603333,-122.332222,"Approximate","High","","https://en.wikipedia.org/wiki/National_Register_of_Historic_Places_listings_in_Seattle","83003339","1983-04-14"],["Holyoke Building","Commercial & office",1976,"Sourced","","1018-1022 1st Ave","Seattle","WA","",47.605556,-122.334722,"Approximate","High","","https://en.wikipedia.org/wiki/National_Register_of_Historic_Places_listings_in_Seattle","76001888","1976-06-03"],["Home of the Good Shepherd","Churches & temples",1978,"Sourced","","4649 Sunnyside Ave N","Seattle","WA","",47.664167,-122.330833,"Approximate","Medium","The register lists the location as “Sunnyside, N. and 50th St.”; the street address shown is the Good Shepherd Center’s.","https://en.wikipedia.org/wiki/National_Register_of_Historic_Places_listings_in_Seattle","78002753","1978-05-23"],["Hotel Sorrento","Hotels & apartments",2021,"Sourced","","900 Madison St","Seattle","WA","",47.6087,-122.3267,"Approximate","High","","https://en.wikipedia.org/wiki/National_Register_of_Historic_Places_listings_in_Seattle","100006936","2021-09-20"],["Hull Building","Commercial & office",1983,"Sourced","","2401-2405 1st Ave","Seattle","WA","",47.614167,-122.346944,"Approximate","High","","https://en.wikipedia.org/wiki/National_Register_of_Historic_Places_listings_in_Seattle","83003340","1983-01-27"],["Samuel Hyde House","Houses",1982,"Sourced","","3726 E Madison St","Seattle","WA","",47.631944,-122.283611,"Approximate","High","","https://en.wikipedia.org/wiki/National_Register_of_Historic_Places_listings_in_Seattle","82004238","1982-04-12"],["Immanuel Lutheran Church","Churches & temples",1982,"Sourced","","1215 Thomas St","Seattle","WA","",47.620833,-122.330833,"Approximate","High","","https://en.wikipedia.org/wiki/National_Register_of_Historic_Places_listings_in_Seattle","82004239","1982-02-25"],["Interlake Public School","Schools & libraries",1983,"Sourced","","4416 Wallingford Ave N","Seattle","WA","",47.661111,-122.334722,"Approximate","High","","https://en.wikipedia.org/wiki/National_Register_of_Historic_Places_listings_in_Seattle","83003341","1983-07-14"],["Iron Pergola","Bridges & other structures",1971,"Sourced","","1st Ave and Yesler Way","Seattle","WA","",47.601944,-122.332778,"Approximate","High","","https://en.wikipedia.org/wiki/National_Register_of_Historic_Places_listings_in_Seattle","71000875","1971-08-26"],["John N. Cobb (fisheries research vessel)","Ships & boats",2009,"Sourced","","","Winchester Bay","OR","","","","","Low","Listed at 7600 Sand Point Way NE, Seattle, but she was decommissioned in 2008 and sold, and has left Seattle. Wikipedia last places her in Winchester Bay, Oregon (2017–2018), so there is no map position.","https://en.wikipedia.org/wiki/National_Register_of_Historic_Places_listings_in_Seattle","09000047","2009-02-11"],["King Street Station","Industrial & transportation",1973,"Sourced","","303 S Jackson St","Seattle","WA","",47.598889,-122.329444,"Approximate","High","","https://en.wikipedia.org/wiki/National_Register_of_Historic_Places_listings_in_Seattle","73001877","1973-04-13"],["Knights of Columbus Hall - Council No. 676","Theaters, clubs & halls",2019,"Sourced","","722 E Union St","Seattle","WA","",47.613,-122.3225,"Approximate","High","","https://en.wikipedia.org/wiki/National_Register_of_Historic_Places_listings_in_Seattle","100004459","2019-09-30"],["Joseph Kraus House","Houses",1982,"Sourced","","2812 Mt St Helens Pl","Seattle","WA","",47.578056,-122.285,"Approximate","High","","https://en.wikipedia.org/wiki/National_Register_of_Historic_Places_listings_in_Seattle","82004240","1982-02-25"],["Lake Washington Boulevard","Parks, sites & monuments",2017,"Sourced","","From Montlake Blvd through the Washington Park Arboretum to Seward Park","Seattle","WA","",47.609499,-122.28293,"","High","","https://en.wikipedia.org/wiki/National_Register_of_Historic_Places_listings_in_Seattle","100000989","2017-05-08"],["Leamington Hotel and Apartments","Hotels & apartments",1994,"Sourced","","317 Marion St","Seattle","WA","",47.605278,-122.331111,"Approximate","High","","https://en.wikipedia.org/wiki/National_Register_of_Historic_Places_listings_in_Seattle","94000419","1994-05-13"],["Eliza Ferry Leary House","Houses",1972,"Sourced","","1551 10th Ave E","Seattle","WA","",47.633889,-122.318889,"Approximate","High","","https://en.wikipedia.org/wiki/National_Register_of_Historic_Places_listings_in_Seattle","72001274","1972-04-14"],["Hannah Lewis House","Houses",2018,"Sourced","","2317 13th Ave E","Seattle","WA","",47.6401,-122.3161,"Approximate","High","","https://en.wikipedia.org/wiki/National_Register_of_Historic_Places_listings_in_Seattle","100002392","2018-04-27"],["Liggett Building","Commercial & office",2011,"Sourced","","1424 4th Ave","Seattle","WA","",47.61,-122.336111,"Approximate","High","","https://en.wikipedia.org/wiki/National_Register_of_Historic_Places_listings_in_Seattle","11000626","2011-08-31"],["Lyon Building","Commercial & office",1995,"Sourced","","607 3rd Ave","Seattle","WA","",47.602222,-122.33,"Approximate","High","","https://en.wikipedia.org/wiki/National_Register_of_Historic_Places_listings_in_Seattle","95000806","1995-06-30"],["MV Westward (wooden motor vessel)","Ships & boats",2007,"Sourced","","","Friday Harbor","WA","","","","","Low","Listed at 1010 Valley St, Seattle. Wikipedia gives her home port as Friday Harbor, WA (its latest dated information is from 2009), so her current berth is uncertain and she has no map position.","https://en.wikipedia.org/wiki/National_Register_of_Historic_Places_listings_in_Seattle","07000304","2007-04-12"],["Magnolia Public Library","Schools & libraries",2015,"Sourced","","2801 34th Ave W","Seattle","WA","",47.6452,-122.4013,"Approximate","Medium","Wikipedia’s list shows May 11, 2006, which conflicts with the reference number (#15000453). The National Park Service record is dated July 21, 2015, so 2015 is used.","https://npgallery.nps.gov/AssetDetail/NRIS/15000453","15000453","2015-07-21"],["George and Irene Matzen House","Houses",2019,"Sourced","","320 W Kinnear Pl","Seattle","WA","",47.6278,-122.3616,"Approximate","High","","https://en.wikipedia.org/wiki/National_Register_of_Historic_Places_listings_in_Seattle","100004329","2019-08-26"],["Medical Dental Building","Commercial & office",2006,"Sourced","","509 Olive Way","Seattle","WA","",47.6147,-122.3369,"Approximate","High","","https://en.wikipedia.org/wiki/National_Register_of_Historic_Places_listings_in_Seattle","06000371","2006-05-11"],["R. D. Merrill House","Houses",1977,"Sourced","","919 Harvard Ave E","Seattle","WA","",47.6275,-122.3206,"Approximate","High","","https://en.wikipedia.org/wiki/National_Register_of_Historic_Places_listings_in_Seattle","77001339","1977-08-22"],["Millionaire’s Row Historic District","Historic districts",2021,"Sourced","","626-1021 14th Ave E, 1409 E Aloha St and 1409 E Prospect St","Seattle","WA","",47.6269,-122.3146,"","High","A district: the pin marks its approximate center.","https://en.wikipedia.org/wiki/National_Register_of_Historic_Places_listings_in_Seattle","100006062","2021-01-28"],["Montlake Bridge","Bridges & other structures",1982,"Sourced","","Spans the Lake Washington Ship Canal","Seattle","WA","",47.6475,-122.3036,"","High","Part of the Historic Bridges and Tunnels in Washington thematic listing.","https://en.wikipedia.org/wiki/National_Register_of_Historic_Places_listings_in_Seattle","82004242","1982-07-16"],["Montlake Historic District","Historic districts",2015,"Sourced","","Roughly bounded by the Lake Washington Ship Canal, Interlaken Park, 15th Ave E and the Washington Park Arboretum","Seattle","WA","",47.6354,-122.3067,"","High","A district: the pin marks its approximate center.","https://en.wikipedia.org/wiki/National_Register_of_Historic_Places_listings_in_Seattle","15000499","2015-10-15"],["Moore Theatre and Hotel","Theaters, clubs & halls",1974,"Sourced","","1932 2nd Ave","Seattle","WA","",47.6119,-122.3397,"Approximate","High","","https://en.wikipedia.org/wiki/National_Register_of_Historic_Places_listings_in_Seattle","74001958","1974-08-30"],["Mount Baker Park and Boulevard","Parks, sites & monuments",2020,"Sourced","","Lake Park Dr S and S Mount Baker Park Blvd","Seattle","WA","",47.581,-122.2881,"","High","","https://en.wikipedia.org/wiki/National_Register_of_Historic_Places_listings_in_Seattle","100004961","2020-02-10"],["Mount Baker Park Historic District","Historic districts",2018,"Sourced","","Roughly bounded by 30th Ave S, Lake Washington Blvd, 37th Ave S, S College, S Court, S Hanford and S Byron Sts","Seattle","WA","",47.5825,-122.29,"","High","A district: the pin marks its approximate center.","https://en.wikipedia.org/wiki/National_Register_of_Historic_Places_listings_in_Seattle","100002975","2018-09-24"],["Mount Baker Park Improvement Club Clubhouse","Theaters, clubs & halls",2016,"Sourced","","2811 Mount Rainier Dr S","Seattle","WA","",47.5779,-122.2876,"Approximate","High","","https://en.wikipedia.org/wiki/National_Register_of_Historic_Places_listings_in_Seattle","16000855","2016-12-13"],["Mount Baker Ridge Tunnel","Bridges & other structures",1982,"Sourced","","East of WA 90 (I-90)","Seattle","WA","",47.5903,-122.2872,"","High","Part of the Historic Bridges and Tunnels in Washington thematic listing.","https://en.wikipedia.org/wiki/National_Register_of_Historic_Places_listings_in_Seattle","82004243","1982-07-16"],["Mount Zion Baptist Church","Churches & temples",2018,"Sourced","","1634 19th Ave","Seattle","WA","",47.6163,-122.3074,"Approximate","High","","https://en.wikipedia.org/wiki/National_Register_of_Historic_Places_listings_in_Seattle","100002407","2018-05-14"],["National Building","Commercial & office",1982,"Sourced","","1006-1024 Western Ave","Seattle","WA","",47.605,-122.3361,"Approximate","High","","https://en.wikipedia.org/wiki/National_Register_of_Historic_Places_listings_in_Seattle","82004244","1982-04-29"],["Naval Air Station (NAS) Seattle","Historic districts",2010,"Sourced","","7400 Sand Point Way NE","Seattle","WA","",47.6822,-122.2608,"Approximate","High","Now Magnuson Park area.","https://en.wikipedia.org/wiki/National_Register_of_Historic_Places_listings_in_Seattle","09001218","2010-07-02"],["Naval Military Hangar-University Shell House","Industrial & transportation",1975,"Sourced","","University of Washington campus","Seattle","WA","",47.6481,-122.2989,"","High","","https://en.wikipedia.org/wiki/National_Register_of_Historic_Places_listings_in_Seattle","75001856","1975-07-01"],["Naval Reserve Armory","Government & civic",2009,"Sourced","","860 Terry Ave N","Seattle","WA","",47.627592,-122.336958,"Approximate","High","","https://en.wikipedia.org/wiki/National_Register_of_Historic_Places_listings_in_Seattle","09000506","2009-07-08"],["New Richmond Hotel","Hotels & apartments",2011,"Sourced","","308 4th Ave S","Seattle","WA","",47.599722,-122.328611,"Approximate","High","Also known as the Downtowner Hotel and Addison on Fourth.","https://en.wikipedia.org/wiki/National_Register_of_Historic_Places_listings_in_Seattle","11000426","2011-07-12"],["New Washington Hotel","Hotels & apartments",1989,"Sourced","","1902 2nd Ave","Seattle","WA","",47.611389,-122.339444,"Approximate","High","","https://en.wikipedia.org/wiki/National_Register_of_Historic_Places_listings_in_Seattle","89001607","1989-09-28"],["Nihon Go Gakko","Schools & libraries",1982,"Sourced","","1414 S Weller St","Seattle","WA","",47.598056,-122.310556,"Approximate","High","","https://en.wikipedia.org/wiki/National_Register_of_Historic_Places_listings_in_Seattle","82004245","1982-06-23"],["Nippon Kan","Theaters, clubs & halls",1978,"Sourced","","622 S Washington St","Seattle","WA","",47.601389,-122.323889,"Approximate","High","","https://en.wikipedia.org/wiki/National_Register_of_Historic_Places_listings_in_Seattle","78002754","1978-05-22"],["Northern Bank and Trust Building","Commercial & office",2003,"Sourced","","1500 4th Ave","Seattle","WA","",47.610556,-122.335,"Approximate","High","","https://en.wikipedia.org/wiki/National_Register_of_Historic_Places_listings_in_Seattle","03000165","2003-03-26"],["Northern Life Tower","Commercial & office",1975,"Sourced","","1212 3rd Ave","Seattle","WA","",47.608056,-122.334167,"Approximate","High","","https://en.wikipedia.org/wiki/National_Register_of_Historic_Places_listings_in_Seattle","75001857","1975-05-30"],["Old Georgetown City Hall","Government & civic",1983,"Sourced","","6202 13th Ave S","Seattle","WA","",47.547778,-122.314722,"Approximate","High","","https://en.wikipedia.org/wiki/National_Register_of_Historic_Places_listings_in_Seattle","83003342","1983-04-14"],["Old Public Safety Building","Government & civic",1973,"Sourced","","4th Ave and Terrace St","Seattle","WA","",47.602222,-122.326667,"Approximate","Medium","The register lists two cross-street locations (4th Ave and Terrace St; 5th Ave and Yesler Way), so the address is only a rough guide.","https://en.wikipedia.org/wiki/National_Register_of_Historic_Places_listings_in_Seattle","73001878","1973-06-19"],["Olympic Hotel","Hotels & apartments",1979,"Sourced","","1200-1220 4th Ave","Seattle","WA","",47.608333,-122.333056,"Approximate","High","","https://en.wikipedia.org/wiki/National_Register_of_Historic_Places_listings_in_Seattle","79002538","1979-06-15"],["Panama Hotel","Hotels & apartments",2006,"Sourced","","605 S Main St","Seattle","WA","",47.600086,-122.326241,"Approximate","High","","https://en.wikipedia.org/wiki/National_Register_of_Historic_Places_listings_in_Seattle","06000462","2006-03-20"],["Paramount Theatre","Theaters, clubs & halls",1974,"Sourced","","901 Pine St","Seattle","WA","",47.613611,-122.33,"Approximate","High","","https://en.wikipedia.org/wiki/National_Register_of_Historic_Places_listings_in_Seattle","74001959","1974-10-09"],["Park Department, Division of Playgrounds","Government & civic",1972,"Sourced","","301 Terry Ave","Seattle","WA","",47.604167,-122.320556,"Approximate","High","","https://en.wikipedia.org/wiki/National_Register_of_Historic_Places_listings_in_Seattle","72001275","1972-03-16"],["William Parsons House","Houses",1991,"Sourced","","2706 Harvard Ave E","Seattle","WA","",47.645,-122.320556,"Approximate","High","","https://en.wikipedia.org/wiki/National_Register_of_Historic_Places_listings_in_Seattle","91000782","1991-06-21"],["Phillips House","Houses",1993,"Sourced","","711-713 E Union St","Seattle","WA","",47.612778,-122.322778,"Approximate","High","","https://en.wikipedia.org/wiki/National_Register_of_Historic_Places_listings_in_Seattle","93000359","1993-04-29"],["Pike Place Public Market Historic District","Historic districts",1970,"Sourced","","Bounded by Western Ave, Virginia St, 1st Ave and the south wall of the Economy Market","Seattle","WA","",47.610278,-122.340278,"","High","A district: the pin marks its approximate center.","https://en.wikipedia.org/wiki/National_Register_of_Historic_Places_listings_in_Seattle","70000644","1970-03-13"],["Pioneer Building, Pergola, and Totem Pole","Commercial & office",1977,"Sourced","","600 1st Ave","Seattle","WA","",47.6025,-122.3325,"Approximate","Medium","The pergola and totem pole stand at 1st Ave and Yesler Way. Address is the Pioneer Building’s.","https://en.wikipedia.org/wiki/National_Register_of_Historic_Places_listings_in_Seattle","77001340","1977-05-05"],["Pioneer Hall","Theaters, clubs & halls",1970,"Sourced","","1642 43rd Ave E","Seattle","WA","",47.634722,-122.276111,"Approximate","High","","https://en.wikipedia.org/wiki/National_Register_of_Historic_Places_listings_in_Seattle","70000645","1970-06-05"],["Pioneer Square-Skid Road District","Historic districts",1970,"Sourced","","Roughly bounded by the Viaduct, Railroad Ave S, King St, 4th and 5th Aves, James and Columbia Sts","Seattle","WA","",47.600833,-122.332222,"","High","District was enlarged twice. The pin marks its approximate center.","https://en.wikipedia.org/wiki/National_Register_of_Historic_Places_listings_in_Seattle","70000086","1970-06-22"],["Pirate (R-class sloop)","Ships & boats",2000,"Sourced","","1010 Valley St","Seattle","WA","",47.62697,-122.33593,"","High","Vessels move; the pin shows the berth given in the National Register listing.","https://en.wikipedia.org/wiki/National_Register_of_Historic_Places_listings_in_Seattle","00000968","2000-08-15"],["Queen Anne Club","Theaters, clubs & halls",1983,"Sourced","","1530 Queen Anne Ave N","Seattle","WA","",47.633611,-122.355556,"Approximate","High","","https://en.wikipedia.org/wiki/National_Register_of_Historic_Places_listings_in_Seattle","83003344","1983-01-27"],["Queen Anne High School","Schools & libraries",1985,"Sourced","","201 Galer St","Seattle","WA","",47.631667,-122.350833,"Approximate","High","","https://en.wikipedia.org/wiki/National_Register_of_Historic_Places_listings_in_Seattle","85002916","1985-11-21"],["Queen Anne Post Office and Regional Headquarters","Government & civic",2011,"Sourced","","415 1st Ave N","Seattle","WA","",47.6235,-122.3557,"Approximate","Medium","Map position corrected by hand: the published coordinates fell in Pioneer Square, nowhere near the address.","https://en.wikipedia.org/wiki/National_Register_of_Historic_Places_listings_in_Seattle","11000427","2011-07-12"],["Queen Anne Public School","Schools & libraries",1975,"Sourced","","515 W Galer St","Seattle","WA","",47.632222,-122.362778,"Approximate","High","Converted to condominiums in 1984. (Wikipedia’s list gives the address as 1401 5th Avenue West; the National Park Service record says 515 W. Galer St.)","https://en.wikipedia.org/wiki/National_Register_of_Historic_Places_listings_in_Seattle","75001858","1975-07-30"],["Rainier Club","Theaters, clubs & halls",1976,"Sourced","","810 4th Ave","Seattle","WA","",47.606111,-122.330833,"Approximate","High","","https://en.wikipedia.org/wiki/National_Register_of_Historic_Places_listings_in_Seattle","76001889","1976-04-22"],["Ravenna-Cowen North Historic District","Historic districts",2018,"Sourced","","Roughly bounded by 65th St, Ravenna Park, Ravenna Ravine and 12th Ave","Seattle","WA","",47.6747,-122.3097,"","High","A district: the pin marks its approximate center.","https://en.wikipedia.org/wiki/National_Register_of_Historic_Places_listings_in_Seattle","100002939","2018-09-13"],["Ravenna Park Bridge","Bridges & other structures",1982,"Sourced","","20th Ave, spanning the Ravenna Park ravine","Seattle","WA","",47.671944,-122.305833,"","High","Part of the Historic Bridges and Tunnels in Washington thematic listing.","https://en.wikipedia.org/wiki/National_Register_of_Historic_Places_listings_in_Seattle","82004246","1982-07-16"],["Raymond-Ogden Mansion","Houses",1979,"Sourced","","702 35th Ave","Seattle","WA","",47.608333,-122.286944,"Approximate","High","","https://en.wikipedia.org/wiki/National_Register_of_Historic_Places_listings_in_Seattle","79002539","1979-06-15"],["Rector Hotel","Hotels & apartments",2002,"Sourced","","619-621 3rd Ave","Seattle","WA","",47.603333,-122.330833,"Approximate","High","Now known as the St. Charles Hotel building.","https://en.wikipedia.org/wiki/National_Register_of_Historic_Places_listings_in_Seattle","02000863","2002-08-09"],["Redelsheimer-Ostrander House","Houses",1990,"Sourced","","200 40th Ave E","Seattle","WA","",47.620833,-122.279722,"Approximate","High","","https://en.wikipedia.org/wiki/National_Register_of_Historic_Places_listings_in_Seattle","89002298","1990-01-12"],["Dr. José Rizal Park","Parks, sites & monuments",2025,"Sourced","","1007 12th Ave S","Seattle","WA","",47.5924,-122.3175,"Approximate","High","","https://en.wikipedia.org/wiki/National_Register_of_Historic_Places_listings_in_Seattle","100011849","2025-05-19"],["Roanoke Park Historic District","Historic districts",2009,"Sourced","","Bounded by Shelby St (N), Roanoke St (S), Harvard Ave (W) and 10th Ave (E)","Seattle","WA","",47.645047,-122.3208,"","High","A district: the pin marks its approximate center.","https://en.wikipedia.org/wiki/National_Register_of_Historic_Places_listings_in_Seattle","09000578","2009-07-30"],["Judge James T. Ronald House","Houses",1975,"Sourced","","421 30th St","Seattle","WA","",47.598611,-122.292778,"Approximate","Medium","Address as published; it may be 30th Ave.","https://en.wikipedia.org/wiki/National_Register_of_Historic_Places_listings_in_Seattle","75001859","1975-02-20"],["Schmitz Park Bridge","Bridges & other structures",1982,"Sourced","","Spans the Schmitz Park ravine","Seattle","WA","",47.577222,-122.402222,"","High","Part of the Historic Bridges and Tunnels in Washington thematic listing.","https://en.wikipedia.org/wiki/National_Register_of_Historic_Places_listings_in_Seattle","82004247","1982-07-16"],["Schooner Martha","Ships & boats",2001,"Sourced","","","Port Townsend","WA","","","","","Medium","Listed at 1010 Valley St, Seattle, but she has moved to Port Townsend (see schoonermartha.org), so there is no Seattle map position.","https://en.wikipedia.org/wiki/National_Register_of_Historic_Places_listings_in_Seattle","01001205","2001-11-05"],["Seattle Art Museum (Volunteer Park; now the Seattle Asian Art Museum)","Government & civic",2016,"Sourced","","1400 E Prospect St","Seattle","WA","",47.6303,-122.3143,"Approximate","High","Listed as “Seattle Art Museum”; now houses the Seattle Asian Art Museum.","https://en.wikipedia.org/wiki/National_Register_of_Historic_Places_listings_in_Seattle","16000474","2016-07-20"],["Seattle Chinatown Historic District","Historic districts",1986,"Sourced","","Roughly bounded by Main, Jackson, I-5, Weller and 5th","Seattle","WA","",47.598889,-122.323611,"","High","A district: the pin marks its approximate center.","https://en.wikipedia.org/wiki/National_Register_of_Historic_Places_listings_in_Seattle","86003153","1986-11-06"],["Seattle Public Library, Columbia Branch","Schools & libraries",1982,"Sourced","","4721 Rainier Ave S","Seattle","WA","",47.56,-122.285833,"Approximate","High","Carnegie library; listed simply as “Seattle Public Library”.","https://en.wikipedia.org/wiki/National_Register_of_Historic_Places_listings_in_Seattle","82004909","1982-08-03"],["Seattle Public Library, Fremont Branch","Schools & libraries",1982,"Sourced","","731 N 35th St","Seattle","WA","",47.651111,-122.346944,"Approximate","High","Carnegie library; listed simply as “Seattle Public Library”.","https://en.wikipedia.org/wiki/National_Register_of_Historic_Places_listings_in_Seattle","82004252","1982-08-03"],["Seattle Public Library, Green Lake Branch","Schools & libraries",1982,"Sourced","","7364 E Green Lake Dr N","Seattle","WA","",47.681667,-122.325833,"Approximate","High","Carnegie library; listed simply as “Seattle Public Library”.","https://en.wikipedia.org/wiki/National_Register_of_Historic_Places_listings_in_Seattle","82004253","1982-08-03"],["Seattle Public Library, Queen Anne Branch","Schools & libraries",1982,"Sourced","","400 W Garfield St","Seattle","WA","",47.633889,-122.361389,"Approximate","High","Carnegie library; listed simply as “Seattle Public Library”.","https://en.wikipedia.org/wiki/National_Register_of_Historic_Places_listings_in_Seattle","82004250","1982-08-03"],["Seattle Public Library, University Branch","Schools & libraries",1982,"Sourced","","5009 Roosevelt Way NE","Seattle","WA","",47.665278,-122.316389,"Approximate","High","Carnegie library; listed simply as “Seattle Public Library”.","https://en.wikipedia.org/wiki/National_Register_of_Historic_Places_listings_in_Seattle","82004251","1982-08-03"],["Seattle Public Library, West Seattle Branch","Schools & libraries",1982,"Sourced","","2306 42nd Ave SW","Seattle","WA","",47.582778,-122.383611,"Approximate","High","Carnegie library; listed simply as “Seattle Public Library”.","https://en.wikipedia.org/wiki/National_Register_of_Historic_Places_listings_in_Seattle","82004249","1982-08-03"],["Seattle Yacht Club","Theaters, clubs & halls",2006,"Sourced","","1807 Hamlin St","Seattle","WA","",47.647222,-122.308889,"Approximate","High","","https://en.wikipedia.org/wiki/National_Register_of_Historic_Places_listings_in_Seattle","06000370","2006-05-10"],["Seattle, Chief of the Suquamish, Statue","Parks, sites & monuments",1984,"Sourced","","Tilikum Place (5th Ave, Denny Way and Cedar St)","Seattle","WA","",47.618611,-122.346111,"","High","","https://en.wikipedia.org/wiki/National_Register_of_Historic_Places_listings_in_Seattle","84003502","1984-04-19"],["Shafer Building","Commercial & office",1995,"Sourced","","523 Pine St","Seattle","WA","",47.612222,-122.334167,"Approximate","High","","https://en.wikipedia.org/wiki/National_Register_of_Historic_Places_listings_in_Seattle","95001445","1995-12-13"],["Henry Owen Shuey House","Houses",2002,"Sourced","","5218 16th Ave NE","Seattle","WA","",47.6675,-122.309167,"Approximate","High","","https://en.wikipedia.org/wiki/National_Register_of_Historic_Places_listings_in_Seattle","02001487","2002-12-05"],["Skinner Building","Commercial & office",1978,"Sourced","","1300-1334 5th Ave","Seattle","WA","",47.609722,-122.3325,"Approximate","High","","https://en.wikipedia.org/wiki/National_Register_of_Historic_Places_listings_in_Seattle","78002756","1978-11-28"],["Stimson-Green House","Houses",1976,"Sourced","","1204 Minor Ave","Seattle","WA","",47.611944,-122.323889,"Approximate","High","","https://en.wikipedia.org/wiki/National_Register_of_Historic_Places_listings_in_Seattle","76001890","1976-05-04"],["Stuart House and Gardens","Houses",1983,"Sourced","","619 W Comstock St","Seattle","WA","",47.629722,-122.3665,"Approximate","Medium","Map position corrected by hand: the published longitude fell east of Lake Washington.","https://en.wikipedia.org/wiki/National_Register_of_Historic_Places_listings_in_Seattle","83003345","1983-04-14"],["Summit School","Schools & libraries",1979,"Sourced","","E Union St and Summit Ave","Seattle","WA","",47.613611,-122.324444,"Approximate","High","","https://en.wikipedia.org/wiki/National_Register_of_Historic_Places_listings_in_Seattle","79002540","1979-10-04"],["Supply Laundry Building","Industrial & transportation",2013,"Sourced","","1265 Republican St","Seattle","WA","",47.622831,-122.330717,"Approximate","High","","https://en.wikipedia.org/wiki/National_Register_of_Historic_Places_listings_in_Seattle","13000209","2013-04-23"],["Temple de Hirsch","Churches & temples",1984,"Sourced","","15th Ave and E Union St","Seattle","WA","",47.613333,-122.311111,"Approximate","High","","https://en.wikipedia.org/wiki/National_Register_of_Historic_Places_listings_in_Seattle","84003506","1984-01-05"],["Will H. Thompson House","Houses",1979,"Sourced","","3119 S Day St","Seattle","WA","",47.590556,-122.290556,"Approximate","High","","https://en.wikipedia.org/wiki/National_Register_of_Historic_Places_listings_in_Seattle","79002541","1979-11-29"],["Times Building","Commercial & office",1983,"Sourced","","414 Olive Way","Seattle","WA","",47.613056,-122.336667,"Approximate","High","","https://en.wikipedia.org/wiki/National_Register_of_Historic_Places_listings_in_Seattle","83003346","1983-01-27"],["F/V Tordenskjold (West Coast Halibut Schooner)","Ships & boats",2023,"Sourced","","860 Terry Ave N (Lake Union Park Historic Ships Wharf)","Seattle","WA","",47.6279,-122.3362,"Approximate","High","Vessels move; the pin shows the berth given in the National Register listing.","https://en.wikipedia.org/wiki/National_Register_of_Historic_Places_listings_in_Seattle","100009631","2023-12-21"],["Triangle Hotel and Bar","Hotels & apartments",1976,"Sourced","","551 1st Ave S","Seattle","WA","",47.596944,-122.332778,"Approximate","High","","https://en.wikipedia.org/wiki/National_Register_of_Historic_Places_listings_in_Seattle","76001892","1976-05-03"],["Trinity Parish Church","Churches & temples",1991,"Sourced","","609 8th Ave","Seattle","WA","",47.605278,-122.325278,"Approximate","High","","https://en.wikipedia.org/wiki/National_Register_of_Historic_Places_listings_in_Seattle","91001440","1991-09-26"],["Turner-Koepf House","Houses",1976,"Sourced","","2336 15th Ave S","Seattle","WA","",47.583611,-122.311944,"Approximate","High","","https://en.wikipedia.org/wiki/National_Register_of_Historic_Places_listings_in_Seattle","76001893","1976-04-22"],["USCG-11 (United States Coast Guard patrol vessel)","Ships & boats",2022,"Sourced","","1801 Fairview Ave E","Seattle","WA","",47.6359,-122.3276,"Approximate","High","Vessels move; the pin shows the berth given in the National Register listing.","https://en.wikipedia.org/wiki/National_Register_of_Historic_Places_listings_in_Seattle","100008195","2022-09-09"],["U.S. Courthouse","Government & civic",1980,"Sourced","","1010 5th Ave","Seattle","WA","",47.607222,-122.33,"Approximate","High","","https://en.wikipedia.org/wiki/National_Register_of_Historic_Places_listings_in_Seattle","80004003","1980-01-08"],["U.S. Immigrant Station and Assay Office","Government & civic",1979,"Sourced","","815 Airport Way S","Seattle","WA","",47.595278,-122.325833,"Approximate","High","Now known as Inscape Arts.","https://en.wikipedia.org/wiki/National_Register_of_Historic_Places_listings_in_Seattle","79002542","1979-01-01"],["U.S. Marine Hospital","Government & civic",1979,"Sourced","","1131 14th Ave S","Seattle","WA","",47.594444,-122.315833,"Approximate","High","Now known as Pacific Medical Center.","https://en.wikipedia.org/wiki/National_Register_of_Historic_Places_listings_in_Seattle","79002543","1979-12-21"],["Union Stables","Industrial & transportation",2013,"Sourced","","2200 Western Ave","Seattle","WA","",47.6123,-122.34611,"Approximate","High","","https://en.wikipedia.org/wiki/National_Register_of_Historic_Places_listings_in_Seattle","13000210","2013-04-23"],["Union Station","Industrial & transportation",1974,"Sourced","","401 S Jackson St","Seattle","WA","",47.598889,-122.327222,"Approximate","High","","https://en.wikipedia.org/wiki/National_Register_of_Historic_Places_listings_in_Seattle","74001960","1974-08-30"],["United Shopping Tower","Commercial & office",1980,"Sourced","","217 Pine St","Seattle","WA","",47.610556,-122.337222,"Approximate","High","","https://en.wikipedia.org/wiki/National_Register_of_Historic_Places_listings_in_Seattle","80004004","1980-08-18"],["U.S. Immigration Building","Government & civic",1987,"Sourced","","84 Union St","Seattle","WA","",47.607778,-122.338889,"Approximate","High","","https://en.wikipedia.org/wiki/National_Register_of_Historic_Places_listings_in_Seattle","87001524","1987-09-14"],["University Bridge","Bridges & other structures",1982,"Sourced","","Spans the Lake Washington Ship Canal","Seattle","WA","",47.653333,-122.318889,"","High","Part of the Historic Bridges and Tunnels in Washington multiple-property listing.","https://en.wikipedia.org/wiki/National_Register_of_Historic_Places_listings_in_Seattle","82004254","1982-07-16"],["University Heights School","Schools & libraries",2010,"Sourced","","5031 University Way NE","Seattle","WA","",47.662222,-122.313056,"Approximate","High","","https://en.wikipedia.org/wiki/National_Register_of_Historic_Places_listings_in_Seattle","10000995","2010-12-07"],["University National Bank Building","Commercial & office",2021,"Sourced","","4500 University Way NE","Seattle","WA","",47.6614,-122.3131,"Approximate","High","","https://en.wikipedia.org/wiki/National_Register_of_Historic_Places_listings_in_Seattle","100006904","2021-09-09"],["University of Washington Faculty Club","Theaters, clubs & halls",2016,"Sourced","","4020 E Stevens Way NE","Seattle","WA","",47.655645,-122.304537,"Approximate","High","","https://en.wikipedia.org/wiki/National_Register_of_Historic_Places_listings_in_Seattle","16000464","2016-07-18"],["Victorian Apartments","Hotels & apartments",1990,"Sourced","","1234-1238 S King St","Seattle","WA","",47.5986,-122.3156,"Approximate","High","","https://en.wikipedia.org/wiki/National_Register_of_Historic_Places_listings_in_Seattle","90001864","1990-12-18"],["Virginia V","Ships & boats",1973,"Sourced","","4250 21st Ave W (Fishermen’s Terminal)","Seattle","WA","",47.6545,-122.387,"","Medium","Vessels move; the pin shows the berth given in the National Register listing. Map position corrected by hand: the published coordinates fell about 2 km south of that address.","https://en.wikipedia.org/wiki/National_Register_of_Historic_Places_listings_in_Seattle","73001875","1973-04-24"],["William Volker Building","Commercial & office",1983,"Sourced","","1000 Lenora St","Seattle","WA","",47.618333,-122.341667,"Approximate","High","Now part of Cornish College of the Arts.","https://en.wikipedia.org/wiki/National_Register_of_Historic_Places_listings_in_Seattle","83004236","1983-10-13"],["Volunteer Park","Parks, sites & monuments",1976,"Sourced","","Between E Prospect and E Galer Sts, and Federal and E 15th Aves","Seattle","WA","",47.630556,-122.314444,"","High","","https://en.wikipedia.org/wiki/National_Register_of_Historic_Places_listings_in_Seattle","76001894","1976-05-03"],["Wagner Houseboat","Houses",1982,"Sourced","","2770 Westlake Ave N","Seattle","WA","",47.645833,-122.345833,"Approximate","High","A floating home on Lake Union.","https://en.wikipedia.org/wiki/National_Register_of_Historic_Places_listings_in_Seattle","82004255","1982-02-19"],["Wallingford Fire and Police Station","Government & civic",1983,"Sourced","","1629 N 45th St","Seattle","WA","",47.661667,-122.335833,"Approximate","High","","https://en.wikipedia.org/wiki/National_Register_of_Historic_Places_listings_in_Seattle","83003347","1983-01-27"],["Wallingford-Meridian Streetcar Historic District","Historic districts",2022,"Sourced","","Roughly bounded by North and NE 50th St, 5th Ave NE, NE 45th and N 46th Sts, and Interlake Ave N","Seattle","WA","",47.6629,-122.3392,"","High","A district: the pin marks its approximate center.","https://en.wikipedia.org/wiki/National_Register_of_Historic_Places_listings_in_Seattle","100008441","2022-12-09"],["Ward House","Houses",1972,"Sourced","","520 E Denny Way","Seattle","WA","",47.613333,-122.3275,"Approximate","High","","https://en.wikipedia.org/wiki/National_Register_of_Historic_Places_listings_in_Seattle","72001277","1972-03-16"],["Washington Athletic Club","Theaters, clubs & halls",2018,"Sourced","","1325 6th Ave","Seattle","WA","",47.6098,-122.3332,"Approximate","High","","https://en.wikipedia.org/wiki/National_Register_of_Historic_Places_listings_in_Seattle","100002408","2018-05-14"],["Washington Hall","Theaters, clubs & halls",2010,"Sourced","","153 14th Ave","Seattle","WA","",47.601111,-122.321667,"Approximate","High","","https://en.wikipedia.org/wiki/National_Register_of_Historic_Places_listings_in_Seattle","10001018","2010-12-13"],["Washington Street Public Boat Landing Facility","Bridges & other structures",1974,"Sourced","","S Washington St, west of Alaskan Way","Seattle","WA","",47.6016,-122.3366,"","Medium","Map position corrected by hand: the published longitude duplicated the one for Washington Hall, about 1.5 km east of this waterfront landing.","https://en.wikipedia.org/wiki/National_Register_of_Historic_Places_listings_in_Seattle","74001961","1974-06-10"],["James W. Jr. & Janie Washington Home & Studio","Houses",2025,"Sourced","","1816 26th Ave","Seattle","WA","",47.6182,-122.2985,"Approximate","High","","https://en.wikipedia.org/wiki/National_Register_of_Historic_Places_listings_in_Seattle","100011848","2025-05-29"],["West Point Light Station","Industrial & transportation",1977,"Sourced","","Discovery Park (West Point)","Seattle","WA","",47.662222,-122.434444,"","High","The register lists the location only as “West of Fort Lawton”.","https://en.wikipedia.org/wiki/National_Register_of_Historic_Places_listings_in_Seattle","77001336","1977-08-16"],["White Center Fieldhouse and Caretaker Cottage","Government & civic",2015,"Sourced","","1321 SW 102nd St","Seattle","WA","",47.5119,-122.3521,"Approximate","High","","https://en.wikipedia.org/wiki/National_Register_of_Historic_Places_listings_in_Seattle","15000455","2015-07-21"],["Wilke Farmhouse","Houses",1974,"Sourced","","1920 2nd Ave N","Seattle","WA","",47.636667,-122.351667,"Approximate","High","","https://en.wikipedia.org/wiki/National_Register_of_Historic_Places_listings_in_Seattle","74001962","1974-11-01"],["Windham Apartments","Hotels & apartments",2006,"Sourced","","420 Blanchard St","Seattle","WA","",47.616944,-122.342222,"Approximate","High","","https://en.wikipedia.org/wiki/National_Register_of_Historic_Places_listings_in_Seattle","06000669","2006-08-02"],["Women's University Club of Seattle","Theaters, clubs & halls",2009,"Sourced","","1105 6th Ave","Seattle","WA","",47.60775,-122.331383,"Approximate","High","","https://en.wikipedia.org/wiki/National_Register_of_Historic_Places_listings_in_Seattle","09000507","2009-07-10"],["Ye College Inn","Hotels & apartments",1982,"Sourced","","4000 University Way NE","Seattle","WA","",47.657222,-122.311667,"Approximate","High","","https://en.wikipedia.org/wiki/National_Register_of_Historic_Places_listings_in_Seattle","82004256","1982-02-25"],["YWCA Building-Seattle","Theaters, clubs & halls",2006,"Sourced","","1118 5th Ave","Seattle","WA","",47.607906,-122.332753,"Approximate","High","","https://en.wikipedia.org/wiki/National_Register_of_Historic_Places_listings_in_Seattle","06001215","2006-12-29"],["Zodiac (schooner)","Ships & boats",1982,"Sourced","","","Bellingham","WA","","","","","Medium","Listed at Lake Union Dry Dock, Seattle, but her home port is now Bellingham, WA, so there is no Seattle map position.","https://en.wikipedia.org/wiki/National_Register_of_Historic_Places_listings_in_Seattle","82004248","1982-04-29"]]}},"errors":{}};
+
+/* ---------- constants ---------- */
+const SHAPES = {
+  circle:'<circle cx="12" cy="12" r="8.6"/>',
+  diamond:'<path d="M12 1.8 22.2 12 12 22.2 1.8 12Z"/>',
+  triangle:'<path d="M12 3 22.6 20.6H1.4Z"/>',
+  square:'<rect x="3.8" y="3.8" width="16.4" height="16.4" rx="2.6"/>',
+  hexagon:'<path d="M12 1.8 20.8 6.9v10.2L12 22.2 3.2 17.1V6.9Z"/>',
+  pentagon:'<path d="M12 2.3 21.9 9.5 18.1 21.2H5.9L2.1 9.5Z"/>',
+  down:'<path d="M1.4 3.4H22.6L12 21Z"/>',
+  cross:'<path d="M8.4 2.4h7.2v6h6v7.2h-6v6H8.4v-6h-6V8.4h6Z"/>'
+};
+const SHAPE_NAMES = Object.keys(SHAPES);
+const PALETTE = ['#D55E00','#0072B2','#009E73','#CC79A7','#E69F00','#56B4E9','#44546A','#8C8C8C'];
+const MINZ = 10, MAXZ = 19;
+const inFrame = (() => { try { return window.self !== window.top; } catch { return true; } })();
+const reduceMotion = matchMedia('(prefers-reduced-motion: reduce)').matches;
+/* orientation labels, used only when no basemap tiles can load: [text, lat, lon, kind, min zoom] (approximate) */
+const LABELS = [
+  ['Downtown',47.6080,-122.3350,'hood',10],['Capitol Hill',47.6235,-122.3200,'hood',10],['Ballard',47.6685,-122.3840,'hood',10],
+  ['Fremont',47.6510,-122.3500,'hood',10],['U District',47.6615,-122.3130,'hood',10],['Queen Anne',47.6370,-122.3570,'hood',10],
+  ['West Seattle',47.5640,-122.3870,'hood',10],['Georgetown',47.5470,-122.3200,'hood',10],['SoDo',47.5830,-122.3350,'hood',10],
+  ['Rainier Beach',47.5223,-122.2690,'hood',10],['Lake City',47.7190,-122.2950,'hood',10],['Northgate',47.7062,-122.3262,'hood',10],
+  ['Wallingford',47.6615,-122.3345,'hood',11.5],['Greenwood',47.6900,-122.3555,'hood',11.5],['Magnolia',47.6395,-122.3995,'hood',11],
+  ['Pioneer Square',47.6015,-122.3340,'hood',13],['Chinatown–ID',47.5985,-122.3245,'hood',13],['Belltown',47.6150,-122.3445,'hood',13],
+  ['South Lake Union',47.6260,-122.3365,'hood',13],['Eastlake',47.6390,-122.3255,'hood',13],['Interbay',47.6455,-122.3750,'hood',12.5],
+  ['Phinney Ridge',47.6740,-122.3545,'hood',12.5],['Ravenna',47.6800,-122.3050,'hood',12.5],['Laurelhurst',47.6600,-122.2800,'hood',12.5],
+  ['Admiral',47.5810,-122.3860,'hood',12.5],['Alki',47.5770,-122.4090,'hood',12.5],['Delridge',47.5640,-122.3600,'hood',12.5],
+  ['Columbia City',47.5600,-122.2860,'hood',12],['Beacon Hill',47.5760,-122.3110,'hood',12],['Shilshole',47.6760,-122.4050,'hood',12.5],
+  ['Crown Hill',47.6970,-122.3770,'hood',12.5],
+  ['Elliott Bay',47.5990,-122.3650,'water',10],['Lake Union',47.6420,-122.3370,'water',11.5],['Lake Washington',47.6200,-122.2600,'water',10],
+  ['Puget Sound',47.6050,-122.4400,'water',10],['Green Lake',47.6795,-122.3385,'water',12],
+  ['Pike Place Market',47.6094,-122.3425,'land',14],['Space Needle',47.6205,-122.3493,'land',13.5],['Lumen Field',47.5952,-122.3316,'land',14],
+  ['Ballard Locks',47.6658,-122.3977,'land',13.5],['Gas Works Park',47.6456,-122.3344,'land',14],['Volunteer Park',47.6300,-122.3150,'land',14],
+  ['Univ. of Washington',47.6553,-122.3035,'land',13]
+];
+
+/* ---------- helpers ---------- */
+const $ = (s, r = document) => r.querySelector(s);
+const clamp = (v, a, b) => Math.min(b, Math.max(a, v));
+const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const sleep = ms => new Promise(r => setTimeout(r, ms));
+const slugify = s => String(s).toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || 'dataset';
+const lsGet = k => { try { return localStorage.getItem(k); } catch { return null; } };
+const lsSet = (k, v) => { try { localStorage.setItem(k, v); } catch {} };
+const pinSVG = shape => `<svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><g class="shape">${SHAPES[shape] || SHAPES.circle}</g></svg>`;
+const swatch = (t, cls = '') => `<span class="sw ${cls}" style="--c:${esc(t.color)}">${pinSVG(t.shape)}</span>`;
+const txt = v => v == null ? '' : typeof v === 'boolean' ? (v ? 'Yes' : 'No') : String(v).trim();
+const num = v => { if (typeof v === 'number') return isFinite(v) ? v : null; const s = txt(v).replace(',', '.'); if (!/^-?\d+(\.\d+)?$/.test(s)) return null; return parseFloat(s); };
+const isUrl = s => /^https?:\/\/\S+$/i.test(s);
+
+/* ====================================================================================
+   Reading the Google Sheet (JSONP via the "gviz" endpoint: needs no keys, works from any
+   web page, and the sheet only has to be shared as "Anyone with the link: Viewer")
+   ==================================================================================== */
+let gvN = 0;
+function cellVal(c, col) {
+  if (c == null) return '';
+  const t = col && col.type;
+  if ((t === 'date' || t === 'datetime' || t === 'timeofday') && c.f != null) return c.f;
+  return c.v == null ? (c.f == null ? '' : c.f) : c.v;
+}
+function tableToTab(t) {
+  const cols = t.cols || [];
+  let labels = cols.map(c => txt(c.label));
+  let rows = (t.rows || []).map(r => { const a = (r.c || []).map((c, i) => cellVal(c, cols[i])); while (a.length < cols.length) a.push(''); return a; });
+  if (!labels.some(Boolean) && rows.length) { labels = rows[0].map(txt); rows = rows.slice(1); }
+  return {labels, rows};
+}
+function gviz(tab) {
+  return new Promise((resolve, reject) => {
+    const cb = `__gv${++gvN}_${Math.random().toString(36).slice(2, 8)}`;
+    const s = document.createElement('script');
+    let timer = 0, finished = false;
+    const done = (err, val) => {
+      if (finished) return; finished = true; clearTimeout(timer);
+      try { delete window[cb]; } catch { window[cb] = undefined; }
+      s.remove(); err ? reject(err) : resolve(val);
+    };
+    window[cb] = r => {
+      if (r && r.status === 'ok' && r.table) return done(null, tableToTab(r.table));
+      const m = r && r.errors && r.errors[0];
+      done(new Error(m ? (m.detailed_message || m.message || m.reason) : 'The sheet returned an error.'));
+    };
+    s.onerror = () => done(new Error('The sheet couldn’t be loaded. Check your connection, and that sharing is set to “Anyone with the link: Viewer”.'));
+    /* a script that loads but never calls back is Google's sign-in page: the sheet isn't shared publicly */
+    s.onload = () => done(new Error('The sheet isn’t shared publicly. In Google Sheets choose Share → General access → Anyone with the link → Viewer.'));
+    timer = setTimeout(() => done(new Error('The sheet took too long to answer.')), 20000);
+    s.src = `https://docs.google.com/spreadsheets/d/${encodeURIComponent(CFG.sheetId)}/gviz/tq?headers=1&sheet=${encodeURIComponent(tab)}&tqx=${encodeURIComponent('out:json;responseHandler:' + cb)}`;
+    document.head.appendChild(s);
+  });
+}
+const col = (tab, ...names) => { const low = tab.labels.map(l => l.toLowerCase()); for (const n of names) { const i = low.indexOf(n); if (i >= 0) return i; } return -1; };
+function parseDatasetsTab(tab) {
+  const iName = col(tab, 'dataset', 'name');
+  if (iName < 0) throw new Error('The “Datasets” tab needs a column headed “Dataset”.');
+  const ix = {tab: col(tab, 'tab', 'sheet'), desc: col(tab, 'description'), yl: col(tab, 'year label'), tl: col(tab, 'type label'), eras: col(tab, 'eras'), place: col(tab, 'place', 'default place')};
+  const g = (r, k) => ix[k] >= 0 ? txt(r[ix[k]]) : '';
+  const out = [], seen = new Set();
+  for (const r of tab.rows) {
+    const name = txt(r[iName]); if (!name) continue;
+    let slug = slugify(name); while (seen.has(slug)) slug += '-2'; seen.add(slug);
+    out.push({name, slug, tab: g(r, 'tab') || name, desc: g(r, 'desc'), yearLabel: g(r, 'yl') || 'Year', typeLabel: g(r, 'tl') || 'Type', eras: g(r, 'eras'), place: g(r, 'place')});
+  }
+  return out;
+}
+function parseTypesTab(tab) {
+  if (!tab) return [];
+  const iD = col(tab, 'dataset'), iT = col(tab, 'type'), iC = col(tab, 'color', 'colour'), iS = col(tab, 'shape');
+  if (iD < 0 || iT < 0) return [];
+  return tab.rows.map(r => ({dataset: txt(r[iD]).toLowerCase(), type: txt(r[iT]), color: iC >= 0 ? txt(r[iC]) : '', shape: iS >= 0 ? txt(r[iS]).toLowerCase() : ''})).filter(t => t.type);
+}
+async function fetchModel() {
+  const dTab = await gviz('Datasets');
+  const list = parseDatasetsTab(dTab);
+  if (!list.length) throw new Error('The “Datasets” tab has no rows yet.');
+  const typesTab = await gviz('Types').catch(() => null);
+  const tabs = {}, errors = {};
+  await Promise.all(list.map(async d => {
+    try { tabs[d.tab] = await gviz(d.tab); } catch (e) { errors[d.tab] = e.message; }
+  }));
+  return {datasets: dTab, types: typesTab, tabs, errors};
+}
+/* the model keeps raw tabs ({labels, rows}); datasets are built from them on demand */
+function makeModel(raw) {
+  const list = parseDatasetsTab(raw.datasets);
+  const typesCfg = parseTypesTab(raw.types);
+  for (const d of list) {
+    const t = raw.tabs[d.tab];
+    d.error = raw.errors && raw.errors[d.tab] || (!t ? `The tab “${d.tab}” couldn’t be read.` : col(t, 'name', 'business', 'title') < 0 ? `The “${d.tab}” tab has no “Name” column (or the tab name in the Datasets tab doesn’t match it exactly).` : '');
+    d.count = t ? countRows(t) : 0;
+  }
+  return {raw, list, typesCfg, built: new Map()};
+}
+function countRows(tab) { const i = col(tab, 'name', 'business', 'title'); return i < 0 ? 0 : tab.rows.filter(r => txt(r[i])).length; }
+
+/* ====================================================================================
+   Turning a tab into a dataset
+   ==================================================================================== */
+const ALIAS = {
+  name: ['name', 'business', 'title'], type: ['type'], year: ['year', 'year founded', 'founded', 'year built', 'built'],
+  yearbasis: ['year basis'], yearlabel: ['year label'], address: ['address', 'street address'], city: ['city'], state: ['state'],
+  hood: ['neighborhood', 'neighbourhood', 'area'], notes: ['notes', 'description', 'details'],
+  src: ['source link', 'source', 'link', 'url', 'website'], conf: ['confidence'], pos: ['position', 'pin position'],
+  lat: ['latitude', 'lat'], lon: ['longitude', 'lon', 'lng', 'long']
+};
+function mapColumns(labels) {
+  const low = labels.map(l => l.toLowerCase()), idx = {}, used = new Set();
+  for (const [k, names] of Object.entries(ALIAS)) for (const n of names) { const i = low.indexOf(n); if (i >= 0 && !used.has(i)) { idx[k] = i; used.add(i); break; } }
+  if (idx.type == null) { const i = low.indexOf('category'); if (i >= 0 && !used.has(i)) { idx.type = i; used.add(i); } }
+  const extras = []; labels.forEach((l, i) => { if (l && !used.has(i)) extras.push([i, l]); });
+  return {idx, extras};
+}
+const shortYear = (a, b) => String(a).slice(0, 2) === String(b).slice(0, 2) ? String(b).slice(2) : String(b);
+function makeEras(bounds, lo, hi, maxYear) {
+  const edges = [lo, ...bounds, hi], out = [];
+  for (let i = 0; i < edges.length - 1; i++) {
+    const last = i === edges.length - 2;
+    const a = i === 0 ? lo : edges[i], b = last ? hi : edges[i + 1] - 1;
+    const label = i === 0 ? `Before ${edges[1]}` : last ? `${edges[i]}–${shortYear(edges[i], maxYear)}` : `${edges[i]}–${shortYear(edges[i], edges[i + 1] - 1)}`;
+    out.push({label, a, b});
+  }
+  return out;
+}
+function buildDataset(cfg, tab, typesCfg) {
+  const {idx, extras} = mapColumns(tab.labels);
+  const get = (r, k) => idx[k] == null ? '' : r[idx[k]];
+  const rows = [];
+  for (const r of tab.rows) {
+    const name = txt(get(r, 'name')); if (!name) continue;
+    const d = {id: rows.length, name, type: txt(get(r, 'type'))};
+    const ym = txt(get(r, 'year')).match(/\d{4}/); d.year = ym ? +ym[0] : null;
+    const basis = txt(get(r, 'yearbasis')).toLowerCase();
+    d.yk = d.year == null ? 'none' : 'exact';
+    if (/^(approx|circa|c\.?$)/.test(basis) && d.year != null) d.yk = 'approx';
+    else if (/^(min|by|lower)/.test(basis) && d.year != null) d.yk = 'by';
+    else if (/^(unclear|unknown)/.test(basis)) { d.yk = 'none'; d.year = null; }
+    d.yt = txt(get(r, 'yearlabel')) || (d.yk === 'exact' ? String(d.year) : d.yk === 'approx' ? 'c. ' + d.year : d.yk === 'by' ? 'By ' + d.year : 'Unclear');
+    d.addr = txt(get(r, 'address'));
+    d.place = [txt(get(r, 'city')), txt(get(r, 'state'))].filter(Boolean).join(', ') || cfg.place || CFG.place;
+    d.hood = txt(get(r, 'hood')); d.notes = txt(get(r, 'notes')); d.src = txt(get(r, 'src')); d.conf = txt(get(r, 'conf'));
+    const la = num(get(r, 'lat')), lo = num(get(r, 'lon'));
+    d.lat = la != null && lo != null && Math.abs(la) <= 90 && Math.abs(lo) <= 180 && (la || lo) ? la : null;
+    d.lon = d.lat == null ? null : lo;
+    d.approx = d.lat != null && /^(approx|estimat)/i.test(txt(get(r, 'pos')));
+    d.snapped = false;
+    d.extra = extras.map(([i, l]) => [l, txt(r[i])]).filter(([, v]) => v !== '');
+    d.search = [d.name, d.addr, d.hood, d.type, d.place].join(' ').toLowerCase();
+    rows.push(d);
+  }
+  /* types: declared ones first (Types tab), then any new ones found in the data */
+  const types = [], byName = new Map();
+  const add = (name, color, shape) => { const k = name.toLowerCase(); if (byName.has(k)) return; const t = {name, color: '', shape: '', ci: types.length}; if (color && CSS.supports('color', color)) t.color = color; if (SHAPES[shape]) t.shape = shape; byName.set(k, t); types.push(t); };
+  const mine = typesCfg.filter(t => t.dataset === cfg.name.toLowerCase());
+  mine.forEach(t => add(t.type, t.color, t.shape));
+  const noTypes = !rows.some(d => d.type);
+  if (!noTypes) for (const d of rows) add(d.type || 'Other', '', '');
+  const usedC = new Set(types.map(t => t.color.toLowerCase()).filter(Boolean)), usedS = new Set(types.map(t => t.shape).filter(Boolean));
+  let n = 0;
+  for (const t of types) {
+    if (!t.color) { let c = PALETTE.find(p => !usedC.has(p.toLowerCase())) || PALETTE[n % PALETTE.length]; usedC.add(c.toLowerCase()); t.color = c; }
+    if (!t.shape) { let s = SHAPE_NAMES.find(p => !usedS.has(p)) || SHAPE_NAMES[n % SHAPE_NAMES.length]; usedS.add(s); t.shape = s; }
+    n++;
+  }
+  if (noTypes) types.length = 0;
+  const fallbackType = {name: '', color: PALETTE[0], shape: 'circle'};
+  for (const d of rows) { const t = noTypes ? fallbackType : byName.get((d.type || 'Other').toLowerCase()); d.t = t; d.ti = noTypes ? -1 : types.indexOf(t); d.type = t.name; }
+  const ds = {cfg, rows, types, noTypes, fallbackType, hasYear: rows.some(d => d.year != null)};
+  ds.hasMin = rows.some(d => d.yk === 'by'); ds.hasNone = ds.hasYear && rows.some(d => d.yk === 'none');
+  ds.hasHood = rows.some(d => d.hood);
+  if (ds.hasYear) {
+    const ys = rows.filter(d => d.year != null).map(d => d.year).sort((a, b) => a - b);
+    const mn = ys[0], mx = ys[ys.length - 1], span = mx - mn;
+    ds.step = span <= 60 ? 5 : span <= 160 ? 10 : span <= 400 ? 25 : 50;
+    ds.lo = Math.floor(mn / ds.step) * ds.step; ds.hi = Math.ceil((mx + 1) / ds.step) * ds.step;
+    ds.bins = Math.round((ds.hi - ds.lo) / ds.step);
+    let bounds = cfg.eras.split(/[,;\s]+/).map(Number).filter(v => v > ds.lo && v < ds.hi);
+    if (!cfg.eras && ys.length >= 8) bounds = [.25, .5, .75].map(p => Math.round(ys[Math.floor(ys.length * p)] / ds.step) * ds.step).filter(v => v > ds.lo && v < ds.hi);
+    bounds = [...new Set(bounds)].sort((a, b) => a - b);
+    ds.eras = bounds.length ? makeEras(bounds, ds.lo, ds.hi, mx) : [];
+  }
+  return ds;
+}
+
+/* ====================================================================================
+   Map engine (a small slippy map: no libraries)
+   ==================================================================================== */
+const mapEl = $('#map'), tilesEl = $('#tiles'), markersEl = $('#markers');
+let W = 800, H = 600;
+const view = {lat: CFG.center[0], lng: CFG.center[1], z: 12};
+const project = (lat, lng, z) => {
+  const S = 256 * 2 ** z, s = Math.sin(lat * Math.PI / 180);
+  return {x: (lng + 180) / 360 * S, y: (0.5 - Math.log((1 + s) / (1 - s)) / (4 * Math.PI)) * S};
+};
+const unproject = (x, y, z) => {
+  const S = 256 * 2 ** z, n = Math.PI - 2 * Math.PI * y / S;
+  return {lat: 180 / Math.PI * Math.atan(0.5 * (Math.exp(n) - Math.exp(-n))), lng: x / S * 360 - 180};
+};
+let anim = null, userMoved = false;
+function panBy(dx, dy) {
+  userMoved = true;
+  const c = project(view.lat, view.lng, view.z), ll = unproject(c.x - dx, c.y - dy, view.z);
+  view.lat = clamp(ll.lat, -84, 84); view.lng = ll.lng; schedule();
+}
+function zoomAround(nz, sx, sy) {
+  userMoved = true;
+  nz = clamp(nz, MINZ, MAXZ);
+  const c = project(view.lat, view.lng, view.z), k = 2 ** (nz - view.z);
+  const ll = unproject((c.x + sx - W / 2) * k - (sx - W / 2), (c.y + sy - H / 2) * k - (sy - H / 2), nz);
+  view.lat = clamp(ll.lat, -84, 84); view.lng = ll.lng; view.z = nz; schedule();
+}
+function flyTo(lat, lng, z, ms = 480) {
+  cancelAnimationFrame(anim);
+  z = clamp(z, MINZ, MAXZ);
+  if (reduceMotion || ms === 0) { Object.assign(view, {lat, lng, z}); schedule(); return; }
+  const a = {...view}, t0 = performance.now();
+  const step = now => {
+    const p = clamp((now - t0) / ms, 0, 1), e = p < .5 ? 4 * p * p * p : 1 - (-2 * p + 2) ** 3 / 2;
+    view.lat = a.lat + (lat - a.lat) * e; view.lng = a.lng + (lng - a.lng) * e; view.z = a.z + (z - a.z) * e;
+    render();
+    if (p < 1) anim = requestAnimationFrame(step);
+  };
+  anim = requestAnimationFrame(step);
+}
+function fitPoints(pts, {pad = 70, maxZ = 17, ms = 480} = {}) {
+  if (!pts.length) return;
+  let la0 = 90, la1 = -90, lo0 = 180, lo1 = -180;
+  for (const p of pts) { la0 = Math.min(la0, p.lat); la1 = Math.max(la1, p.lat); lo0 = Math.min(lo0, p.lon); lo1 = Math.max(lo1, p.lon); }
+  const a = project(la1, lo0, 0), b = project(la0, lo1, 0);
+  const bw = Math.max(b.x - a.x, 1e-9), bh = Math.max(b.y - a.y, 1e-9);
+  const z = clamp(Math.min(Math.log2(Math.max(W - pad * 2, 100) / bw), Math.log2(Math.max(H - pad * 2, 100) / bh)), MINZ, maxZ);
+  const c = unproject((a.x + b.x) / 2 * 2 ** z, (a.y + b.y) / 2 * 2 ** z, z);
+  flyTo(c.lat, c.lng, z, ms);
+}
+
+/* tiles */
+const PROVIDERS = {
+  osm:  {label: 'OpenStreetMap', max: 19,
+         url: (z, x, y) => `https://tile.openstreetmap.org/${z}/${x}/${y}.png`,
+         attrib: '© <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a> contributors'},
+  carto:{label: 'OSM data · CARTO style', max: 19,
+         url: (z, x, y) => `https://${'abcd'[(x + y) & 3]}.basemaps.cartocdn.com/rastertiles/voyager/${z}/${x}/${y}${devicePixelRatio > 1.4 ? '@2x' : ''}.png`,
+         attrib: '© <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a> contributors © <a href="https://carto.com/attributions" target="_blank" rel="noopener">CARTO</a>'}
+};
+let provider = location.protocol === 'file:' ? 'carto' : 'osm';
+let noTilesMode = false, tileCache = new Map(), tileOK = 0, tileErr = 0, autoSwitched = false, toastTimer = 0, tileState = null;
+function setProvider(p, {auto = false} = {}) {
+  provider = p;
+  for (const t of tileCache.values()) t.el.remove();
+  tileCache = new Map(); tileOK = 0; tileErr = 0;
+  $('#basemap').value = p;
+  $('#attrib').innerHTML = PROVIDERS[p].attrib;
+  if (auto) toast('OpenStreetMap’s own tile server didn’t answer' + (location.protocol === 'file:' ? ' (normal when a page is opened as a local file)' : '') + ', so the map is using the same OpenStreetMap data drawn by CARTO.', 9000);
+  schedule();
+}
+const labelsEl = $('#labels');
+const labelEls = LABELS.map(([t, la, lo, k, mz]) => { const e = document.createElement('div'); e.className = 'lbl ' + k; e.textContent = t; labelsEl.appendChild(e); return {e, la, lo, mz}; });
+function setNoTiles(on) {
+  noTilesMode = on; mapEl.classList.toggle('notiles', on);
+  $('#attrib').innerHTML = on ? 'No basemap here · labels are approximate' : PROVIDERS[provider].attrib;
+  if (on) toast(inFrame ? 'This preview blocks map tiles, so the basemap shows labels only. Open the page in a normal browser tab for the full OpenStreetMap view.' : 'Map tiles couldn’t be loaded. Check your internet connection; pins and filters still work.', 12000);
+  noticeIdle(); schedule();
+}
+function positionLabels() {
+  if (!noTilesMode) return;
+  const c = project(view.lat, view.lng, view.z);
+  for (const l of labelEls) {
+    if (view.z < l.mz) { l.e.style.display = 'none'; continue; }
+    const p = project(l.la, l.lo, view.z), x = p.x - c.x + W / 2, y = p.y - c.y + H / 2;
+    if (x < -140 || y < -30 || x > W + 140 || y > H + 30) { l.e.style.display = 'none'; continue; }
+    l.e.style.display = ''; l.e.style.transform = `translate3d(${x.toFixed(1)}px,${y.toFixed(1)}px,0) translate(-50%,-50%)`;
+  }
+}
+function toast(msg, ms = 5000) {
+  const t = $('#toast'); t.textContent = msg; t.hidden = false;
+  clearTimeout(toastTimer); toastTimer = setTimeout(() => { t.hidden = true; }, ms);
+}
+function renderTiles() {
+  const zi = clamp(Math.round(view.z), 2, PROVIDERS[provider].max), scale = 2 ** (view.z - zi), n = 2 ** zi;
+  const cw = project(view.lat, view.lng, zi);
+  const x0 = Math.floor((cw.x - W / 2 / scale) / 256), x1 = Math.floor((cw.x + W / 2 / scale) / 256);
+  const y0 = Math.floor((cw.y - H / 2 / scale) / 256), y1 = Math.floor((cw.y + H / 2 / scale) / 256);
+  const need = new Set();
+  for (let ty = y0; ty <= y1; ty++) {
+    if (ty < 0 || ty >= n) continue;
+    for (let tx = x0; tx <= x1; tx++) {
+      const wx = ((tx % n) + n) % n, key = `${provider}/${zi}/${tx}/${ty}`;
+      need.add(key);
+      if (tileCache.has(key)) continue;
+      const img = new Image();
+      img.className = 'tile'; img.alt = ''; img.decoding = 'async'; img.draggable = false; img.style.opacity = 0;
+      const rec = {el: img, z: zi, x: tx, y: ty, loaded: false, p: provider};
+      img.onload = () => { rec.loaded = true; img.style.opacity = 1; if (rec.p === provider) tileOK++; if (noTilesMode) setNoTiles(false); pruneTiles(); };
+      img.onerror = () => {
+        img.remove(); rec.failed = true;
+        setTimeout(() => { if (tileCache.get(key) === rec) tileCache.delete(key); }, 5000);
+        if (rec.p !== provider) return;
+        tileErr++;
+        if (tileOK === 0 && tileErr >= 4) {
+          if (provider === 'osm' && !autoSwitched) { autoSwitched = true; setProvider('carto', {auto: true}); }
+          else if (provider === 'carto' && !noTilesMode) setNoTiles(true);
+        }
+      };
+      img.src = PROVIDERS[provider].url(zi, wx, ty);
+      tilesEl.appendChild(img); tileCache.set(key, rec);
+    }
+  }
+  for (const [key, rec] of tileCache) {
+    if (rec.z === zi && !need.has(key)) { rec.el.remove(); tileCache.delete(key); continue; }
+    const s2 = 2 ** (view.z - rec.z), c2 = rec.z === zi ? cw : project(view.lat, view.lng, rec.z);
+    rec.el.style.transform = `translate3d(${(rec.x * 256 - c2.x) * s2 + W / 2}px,${(rec.y * 256 - c2.y) * s2 + H / 2}px,0) scale(${s2})`;
+    rec.el.style.zIndex = rec.z === zi ? 2 : 1;
+  }
+  tileState = {zi, need};
+}
+function pruneTiles() {
+  if (!tileState) return;
+  const {zi, need} = tileState;
+  let all = true;
+  for (const key of need) { const r = tileCache.get(key); if (r && !r.loaded && !r.failed) { all = false; break; } }
+  for (const [key, rec] of tileCache) if (rec.z !== zi && (all || Math.abs(rec.z - zi) > 3)) { rec.el.remove(); tileCache.delete(key); }
+}
+
+/* ---------- state for the open dataset ---------- */
+let MODEL = null, DS = null, rows = [], sel = null;
+let F = {y0: 0, y1: 0, types: new Set(), q: '', inclBy: true, inclNone: true, sort: 'year'};
+const pinEls = new Map();
+let live = [], clusterEls = [], lastZq = -1, justDragged = false;
+const hasPos = d => d.lat != null;
+
+function buildPins() {
+  for (const el of pinEls.values()) el.remove();
+  for (const el of clusterEls) el.remove();
+  pinEls.clear(); clusterEls = []; live = [];
+  for (const d of rows) {
+    const b = document.createElement('button');
+    b.type = 'button'; b.className = 'pin off';
+    b.style.setProperty('--c', d.t.color);
+    if (d.yk === 'by') b.classList.add('hollow');
+    if (d.yk === 'none' && DS.hasYear) b.classList.add('hollow', 'dashed');
+    b.innerHTML = pinSVG(d.t.shape);
+    b.setAttribute('aria-label', `${d.name}${DS.hasYear ? ', ' + d.yt : ''}${d.hood ? ', ' + d.hood : ''}`);
+    b.title = d.name + (DS.hasYear ? ' · ' + d.yt : '');
+    b.addEventListener('click', e => { e.stopPropagation(); if (justDragged) return; select(d.id, {fly: false, scroll: true}); });
+    b.addEventListener('mouseenter', () => hover(d.id, true));
+    b.addEventListener('mouseleave', () => hover(d.id, false));
+    markersEl.appendChild(b); pinEls.set(d.id, b);
+  }
+  lastZq = -1;
+}
+function rebuildMarkers() {
+  for (const el of clusterEls) el.remove();
+  clusterEls = []; live = [];
+  const z = view.z, useCluster = z < 18.4, R = z >= 17 ? 30 : 46;
+  const shown = new Set(), cl = [];
+  for (const d of rows) {
+    if (!d._on || !hasPos(d)) continue;
+    if (!useCluster || d.id === sel) { shown.add(d.id); continue; }
+    const p = project(d.lat, d.lon, z);
+    let best = null, bd = R;
+    for (const c of cl) { const dist = Math.hypot(c.x - p.x, c.y - p.y); if (dist < bd) { bd = dist; best = c; } }
+    if (best) { best.items.push(d); best.sx += p.x; best.sy += p.y; best.x = best.sx / best.items.length; best.y = best.sy / best.items.length; }
+    else cl.push({items: [d], sx: p.x, sy: p.y, x: p.x, y: p.y});
+  }
+  for (let merged = true; merged;) {
+    merged = false;
+    for (let i = 0; i < cl.length && !merged; i++) for (let j = i + 1; j < cl.length; j++) {
+      if (Math.hypot(cl[i].x - cl[j].x, cl[i].y - cl[j].y) < R * 0.9) {
+        const a = cl[i], b = cl[j]; a.items.push(...b.items); a.sx += b.sx; a.sy += b.sy;
+        a.x = a.sx / a.items.length; a.y = a.sy / a.items.length; cl.splice(j, 1); merged = true; break;
+      }
+    }
+  }
+  for (const c of cl) {
+    const g = c.items;
+    if (g.length === 1) { shown.add(g[0].id); continue; }
+    const ll = unproject(c.x, c.y, z), el = document.createElement('button');
+    el.type = 'button'; el.className = 'cluster';
+    const sz = 32 + Math.min(g.length, 12) * 1.5;
+    el.style.width = el.style.height = sz + 'px'; el.style.margin = `${-sz / 2}px 0 0 ${-sz / 2}px`;
+    el.textContent = g.length;
+    el.setAttribute('aria-label', `${g.length} places here. Zoom in.`);
+    el.addEventListener('click', e => {
+      e.stopPropagation(); if (justDragged) return;
+      userMoved = true;
+      fitPoints(g.map(d => ({lat: d.lat, lon: d.lon})), {pad: 90, maxZ: Math.min(MAXZ, Math.max(view.z + 1.5, 16))});
+    });
+    markersEl.appendChild(el); clusterEls.push(el); live.push({el, lat: ll.lat, lng: ll.lng});
+  }
+  for (const d of rows) {
+    const el = pinEls.get(d.id), on = shown.has(d.id);
+    el.classList.toggle('off', !on); el.classList.toggle('sel', d.id === sel); el.classList.toggle('approx', !!d.approx);
+    if (on) live.push({el, lat: d.lat, lng: d.lon});
+  }
+}
+function positionMarkers() {
+  const c = project(view.lat, view.lng, view.z);
+  for (const m of live) {
+    const p = project(m.lat, m.lng, view.z), x = p.x - c.x + W / 2, y = p.y - c.y + H / 2;
+    m.el.style.transform = `translate3d(${x.toFixed(1)}px,${y.toFixed(1)}px,0)`;
+    m.el.style.display = (x < -60 || y < -60 || x > W + 60 || y > H + 60) ? 'none' : '';
+  }
+}
+function render() {
+  const zq = Math.round(view.z * 4);
+  if (zq !== lastZq) { lastZq = zq; rebuildMarkers(); }
+  renderTiles(); positionLabels(); positionMarkers();
+}
+let raf = 0;
+function schedule() { if (!raf) raf = requestAnimationFrame(() => { raf = 0; render(); }); }
+function measure() { const r = mapEl.getBoundingClientRect(); W = Math.max(r.width, 1); H = Math.max(r.height, 1); schedule(); }
+new ResizeObserver(measure).observe(mapEl);
+
+/* pointer + wheel + keyboard */
+const ptrs = new Map();
+let drag = null, pinch = null;
+mapEl.addEventListener('pointerdown', e => {
+  if (e.pointerType === 'mouse' && e.button > 0) return;
+  cancelAnimationFrame(anim);
+  ptrs.set(e.pointerId, {x: e.clientX, y: e.clientY});
+  if (ptrs.size === 1) drag = {x: e.clientX, y: e.clientY, sx: e.clientX, sy: e.clientY, moved: false};
+  else if (ptrs.size === 2) { drag = null; startPinch(); }
+});
+mapEl.addEventListener('pointermove', e => {
+  const p = ptrs.get(e.pointerId); if (!p) return;
+  p.x = e.clientX; p.y = e.clientY;
+  if (ptrs.size === 2 && pinch) { updatePinch(); return; }
+  if (!drag) return;
+  if (!drag.moved && Math.hypot(e.clientX - drag.sx, e.clientY - drag.sy) > 4) {
+    drag.moved = true; justDragged = true; mapEl.classList.add('dragging');
+    try { mapEl.setPointerCapture(e.pointerId); } catch {}
+  }
+  if (drag.moved) { panBy(e.clientX - drag.x, e.clientY - drag.y); drag.x = e.clientX; drag.y = e.clientY; }
+});
+const endPtr = e => {
+  ptrs.delete(e.pointerId);
+  if (ptrs.size < 2) pinch = null;
+  if (ptrs.size === 0) { drag = null; mapEl.classList.remove('dragging'); setTimeout(() => { justDragged = false; }, 0); }
+  else if (ptrs.size === 1) { const [p] = ptrs.values(); drag = {x: p.x, y: p.y, sx: p.x, sy: p.y, moved: true}; }
+};
+mapEl.addEventListener('pointerup', endPtr);
+mapEl.addEventListener('pointercancel', endPtr);
+function pinchGeom() {
+  const [a, b] = [...ptrs.values()], r = mapEl.getBoundingClientRect();
+  return {d: Math.hypot(a.x - b.x, a.y - b.y) || 1, x: (a.x + b.x) / 2 - r.left, y: (a.y + b.y) / 2 - r.top};
+}
+function startPinch() { const g = pinchGeom(); pinch = {d0: g.d, z0: view.z, x: g.x, y: g.y}; justDragged = true; }
+function updatePinch() {
+  const g = pinchGeom();
+  panBy(g.x - pinch.x, g.y - pinch.y);
+  zoomAround(pinch.z0 + Math.log2(g.d / pinch.d0), g.x, g.y);
+  pinch.x = g.x; pinch.y = g.y;
+}
+mapEl.addEventListener('wheel', e => {
+  e.preventDefault(); cancelAnimationFrame(anim);
+  const r = mapEl.getBoundingClientRect(), k = e.ctrlKey ? 0.012 : e.deltaMode === 1 ? 0.06 : 0.0032;
+  zoomAround(view.z + clamp(-e.deltaY * k, -1.2, 1.2), e.clientX - r.left, e.clientY - r.top);
+}, {passive: false});
+mapEl.addEventListener('dblclick', e => {
+  if (e.target.closest('.pin,.cluster')) return;
+  const r = mapEl.getBoundingClientRect(), sx = e.clientX - r.left, sy = e.clientY - r.top;
+  const nz = clamp(view.z + 1, MINZ, MAXZ), k = 2 ** (nz - view.z), c = project(view.lat, view.lng, view.z);
+  const ll = unproject((c.x + sx - W / 2) * k - (sx - W / 2), (c.y + sy - H / 2) * k - (sy - H / 2), nz);
+  userMoved = true; flyTo(ll.lat, ll.lng, nz, 260);
+});
+mapEl.addEventListener('keydown', e => {
+  const step = 80;
+  if (e.key === 'ArrowLeft') panBy(step, 0); else if (e.key === 'ArrowRight') panBy(-step, 0);
+  else if (e.key === 'ArrowUp') panBy(0, step); else if (e.key === 'ArrowDown') panBy(0, -step);
+  else if (e.key === '+' || e.key === '=') zoomAround(view.z + 1, W / 2, H / 2);
+  else if (e.key === '-' || e.key === '_') zoomAround(view.z - 1, W / 2, H / 2);
+  else return;
+  e.preventDefault();
+});
+const stepZoom = dz => { userMoved = true; flyTo(view.lat, view.lng, clamp(Math.round(view.z + dz), MINZ, MAXZ), 220); };
+$('#zin').onclick = () => stepZoom(1);
+$('#zout').onclick = () => stepZoom(-1);
+$('#fit').onclick = () => { userMoved = false; fitVisible(); };
+$('#basemap').onchange = e => setProvider(e.target.value);
+const visiblePts = () => rows.filter(d => d._on && hasPos(d)).map(d => ({lat: d.lat, lon: d.lon}));
+function fitVisible(ms) { const p = visiblePts(); if (p.length) fitPoints(p, {pad: 60, maxZ: 17, ms}); }
+function maybeFit() {
+  if (!userMoved) { fitVisible(); return; }
+  const c = project(view.lat, view.lng, view.z);
+  const seen = rows.some(d => { if (!d._on || !hasPos(d)) return false; const p = project(d.lat, d.lon, view.z), x = p.x - c.x + W / 2, y = p.y - c.y + H / 2; return x > 20 && y > 20 && x < W - 20 && y < H - 20; });
+  if (!seen) fitVisible();
+}
+
+/* ---------- selection + card ---------- */
+function hover(id, on) {
+  pinEls.get(id)?.classList.toggle('hl', on);
+  for (const b of $('#list').querySelectorAll('.item')) if (b.dataset.id === String(id)) b.classList.toggle('hl', on);
+}
+const confColor = c => /^high/i.test(c) ? '#2e9b5b' : /^med/i.test(c) ? '#d9a21b' : /^low/i.test(c) ? '#d2503c' : '#8a8170';
+function pinOffset() {
+  const card = $('#card');
+  if (card.hidden || card.offsetWidth < W * 0.6) return 0;
+  return H / 2 - clamp((H - card.offsetHeight - 34) / 2, 56, H / 2);
+}
+function yearNote(d) {
+  const l = DS.cfg.yearLabel;
+  return d.yk === 'exact' ? l : d.yk === 'approx' ? `${l} (approximate)` : d.yk === 'by' ? `${l}: a minimum, the real year may be earlier` : `${l} unclear`;
+}
+function select(id, {fly = true, scroll = false} = {}) {
+  sel = id; if (id != null && fly) userMoved = true;
+  const d = id == null ? null : rows[id];
+  rebuildMarkers(); positionMarkers();
+  for (const b of $('#list').querySelectorAll('.item')) {
+    const on = d && b.dataset.id === String(d.id);
+    on ? b.setAttribute('aria-current', 'true') : b.removeAttribute('aria-current');
+    if (on && scroll) b.scrollIntoView({block: 'nearest'});
+  }
+  const card = $('#card');
+  $('#mapwrap').classList.toggle('has-card', !!d);
+  if (!d) { card.hidden = true; saveHash(); return; }
+  const q = encodeURIComponent([d.addr, d.place].filter(Boolean).join(', ') || d.name);
+  const link = hasPos(d) ? `https://www.openstreetmap.org/?mlat=${d.lat}&mlon=${d.lon}#map=18/${d.lat}/${d.lon}` : `https://www.openstreetmap.org/search?query=${q}`;
+  let host = ''; try { host = new URL(d.src).hostname.replace(/^www\./, ''); } catch {}
+  const extras = d.extra.map(([l, v]) => isUrl(v) ? `<div><a href="${esc(v)}" target="_blank" rel="noopener noreferrer">${esc(l)} ↗</a></div>` : `<div>${esc(l)}: ${esc(v)}</div>`).join('');
+  card.innerHTML = `
+    <button class="x" type="button" aria-label="Close details">×</button>
+    <div class="chips">${DS.noTypes ? '' : `<span class="chip">${swatch(d.t)}${esc(d.type)}</span>`}
+      ${d.conf ? `<span class="chip conf" style="--cc:${confColor(d.conf)}"><i></i>${esc(d.conf)} confidence</span>` : ''}</div>
+    <h3>${esc(d.name)}</h3>
+    ${DS.hasYear ? `<p class="yr"><b>${esc(d.yt)}</b>${esc(yearNote(d))}</p>` : ''}
+    ${d.addr || d.hood ? `<p class="addr">${esc(d.addr)}${d.addr && d.place ? ', ' + esc(d.place) : ''}${d.hood ? ` <span>${d.addr ? '· ' : ''}${esc(d.hood)}</span>` : ''}</p>` : ''}
+    ${d.notes ? `<p class="notes">${esc(d.notes)}</p>` : ''}
+    ${extras ? `<div class="meta">${extras}</div>` : ''}
+    <div class="links">
+      ${isUrl(d.src) ? `<a href="${esc(d.src)}" target="_blank" rel="noopener noreferrer">Source: ${esc(host || 'link')} ↗</a>` : ''}
+      <a href="${esc(link)}" target="_blank" rel="noopener noreferrer">${hasPos(d) ? 'Open in OpenStreetMap' : 'Find on OpenStreetMap'} ↗</a>
+    </div>
+    <p class="pos">${!hasPos(d) ? 'No map position yet: add an address or latitude/longitude in the sheet.' : d.snapped ? 'Pin placed from an OpenStreetMap address match.' : d.approx ? 'Pin position is approximate. Use “Snap pins to addresses” to refine it.' : ''}</p>`;
+  card.hidden = false;
+  $('.x', card).onclick = () => select(null);
+  if (hasPos(d)) {
+    const z = fly ? Math.max(view.z, 16.5) : view.z;
+    if (fly || needsMove(d)) { const p = project(d.lat, d.lon, z), ll = unproject(p.x, p.y + pinOffset(), z); flyTo(ll.lat, ll.lng, z, fly ? 480 : 350); }
+  }
+  saveHash();
+}
+function needsMove(d) {
+  const c = project(view.lat, view.lng, view.z), p = project(d.lat, d.lon, view.z);
+  const x = p.x - c.x + W / 2, y = p.y - c.y + H / 2, m = 60, card = $('#card');
+  const cardTop = card.hidden ? H : H - card.offsetHeight - 40;
+  return x < m || x > W - m || y < m + 40 || y > Math.min(H - m, cardTop - 20);
+}
+document.addEventListener('keydown', e => { if (e.key === 'Escape' && sel != null && !e.target.closest('input,select')) select(null); });
+
+/* ====================================================================================
+   Panel: datasets, filters, results
+   ==================================================================================== */
+const ui = {q: $('#q'), qclr: $('#qclr'), y0: $('#y0'), y1: $('#y1'), fill: $('#fill'), out: $('#yrOut'), hist: $('#hist'),
+  eras: $('#eras'), types: $('#types'), list: $('#list'), showing: $('#showing'), empty: $('#empty'), nav: $('#dsnav')};
+
+function passes(d, skip) {
+  if (skip !== 'type' && !DS.noTypes && !F.types.has(d.ti)) return false;
+  if (skip !== 'year' && DS.hasYear) {
+    if (d.yk === 'none') { if (!F.inclNone) return false; }
+    else { if (d.yk === 'by' && !F.inclBy) return false; if (d.year < F.y0 || d.year > F.y1) return false; }
+  }
+  if (F.q) for (const tok of F.q.split(/\s+/)) if (tok && !d.search.includes(tok)) return false;
+  return true;
+}
+function buildNav() {
+  const list = MODEL.list;
+  ui.nav.hidden = list.length < 2;
+  ui.nav.innerHTML = list.map(d => `<button type="button" data-slug="${esc(d.slug)}" aria-pressed="${DS && DS.cfg.slug === d.slug}">${esc(d.name)}<span class="n">${d.count}</span></button>`).join('');
+}
+ui.nav.addEventListener('click', e => { const b = e.target.closest('button'); if (b) activate(b.dataset.slug); });
+
+function activate(slug, init = {}) {
+  const cfg = MODEL.list.find(d => d.slug === slug) || MODEL.list[0];
+  let ds = MODEL.built.get(cfg.slug);
+  if (!ds) {
+    const tab = MODEL.raw.tabs[cfg.tab];
+    ds = tab ? buildDataset(cfg, tab, MODEL.typesCfg) : buildDataset(cfg, {labels: ['Name'], rows: []}, MODEL.typesCfg);
+    applyGeoCache(ds);
+    MODEL.built.set(cfg.slug, ds);
+  }
+  DS = ds; rows = ds.rows; sel = null; geoTok++; geoRunning = false; geoProgress = null; geoStop = false;
+  $('#card').hidden = true; $('#mapwrap').classList.remove('has-card');
+  $('#dsTitle').textContent = cfg.name;
+  $('#dsDesc').textContent = cfg.desc; $('#dsDesc').hidden = !cfg.desc;
+  document.title = `${cfg.name} · ${CFG.title}`;
+  const bn = $('#banner'); if (cfg.error) { bn.textContent = cfg.error; bn.hidden = false; } else bn.hidden = !!bn.dataset.keep ? false : true;
+  [...ui.nav.children].forEach(b => b.setAttribute('aria-pressed', b.dataset.slug === cfg.slug));
+  F = {y0: ds.lo, y1: ds.hi, types: new Set(ds.types.map((t, i) => i)), q: '', inclBy: true, inclNone: true, sort: ds.hasYear ? 'year' : 'name'};
+  if (init.y) { const m = init.y.match(/^(\d{4})-(\d{4})$/); if (m && ds.hasYear) { F.y0 = clamp(+m[1], ds.lo, ds.hi); F.y1 = clamp(+m[2], F.y0, ds.hi); } }
+  if (init.t != null && !ds.noTypes) { const names = init.t.split('~').map(s => s.toLowerCase()); F.types = new Set(ds.types.map((t, i) => names.includes(t.name.toLowerCase()) ? i : -1).filter(i => i >= 0)); }
+  if (init.q) F.q = init.q.toLowerCase();
+  if (init.by === '0') F.inclBy = false;
+  if (init.un === '0') F.inclNone = false;
+  if (['year', 'name', 'hood'].includes(init.s)) F.sort = init.s;
+  ui.q.value = init.q || ''; ui.qclr.hidden = !ui.q.value;
+  $('#sort').value = F.sort;
+  [...$('#sort').options].forEach(o => { o.hidden = (o.value === 'year' && !ds.hasYear) || (o.value === 'hood' && !ds.hasHood); });
+  $('#secYear').hidden = !ds.hasYear; $('#secType').hidden = ds.noTypes;
+  $('#h-year').textContent = cfg.yearLabel; $('#h-type').textContent = cfg.typeLabel;
+  $('#lblBy').hidden = !ds.hasMin; $('#lblNone').hidden = !ds.hasNone;
+  buildTypeUI(); buildYearUI(); buildPins();
+  apply({fit: false});
+  const pts = visiblePts();
+  fitPoints(pts.length ? pts : [{lat: CFG.center[0], lon: CFG.center[1]}], {pad: 50, maxZ: pts.length ? 17 : 12, ms: init.noFly ? 0 : 450});
+  userMoved = false;
+  noticeIdle();
+  if (init.b != null && rows[init.b]) select(+init.b, {fly: true, scroll: true});
+  startAutoGeocode();
+}
+function buildTypeUI() {
+  ui.types.innerHTML = DS.types.map((t, i) => `<li data-i="${i}"><label class="trow"><input type="checkbox" value="${i}" checked>${swatch(t)}<span class="tn">${esc(t.name)}</span><span class="tc"></span></label><button class="only" type="button" aria-label="Show only ${esc(t.name)}">only</button></li>`).join('');
+}
+function buildYearUI() {
+  if (!DS.hasYear) return;
+  for (const i of [ui.y0, ui.y1]) { i.min = DS.lo; i.max = DS.hi; i.step = 1; }
+  ui.hist.style.gridTemplateColumns = `repeat(${DS.bins},1fr)`;
+  const tickStep = DS.step * Math.ceil(DS.bins / 6), ticks = [];
+  for (let y = DS.lo; y <= DS.hi; y += tickStep) ticks.push(y);
+  $('#ticks').innerHTML = ticks.map(y => `<span style="left:${(y - DS.lo) / (DS.hi - DS.lo) * 100}%">${y}</span>`).join('');
+  ui.eras.innerHTML = DS.eras.map((e, i) => `<button type="button" data-i="${i}" aria-pressed="false">${esc(e.label)}</button>`).join('') + `<button type="button" data-i="all" aria-pressed="true">Any</button>`;
+  const t0 = DS.types[0] || DS.fallbackType;
+  $('#swBy').style.setProperty('--c', '#666'); $('#swBy').innerHTML = pinSVG(t0.shape);
+  $('#swNone').style.setProperty('--c', '#666'); $('#swNone').innerHTML = pinSVG(t0.shape);
+}
+ui.eras.addEventListener('click', e => {
+  const b = e.target.closest('button'); if (!b) return;
+  if (b.dataset.i === 'all') { F.y0 = DS.lo; F.y1 = DS.hi; } else { const r = DS.eras[+b.dataset.i]; F.y0 = r.a; F.y1 = r.b; }
+  apply({fit: true});
+});
+ui.types.addEventListener('change', e => { const cb = e.target.closest('input'); if (!cb) return; cb.checked ? F.types.add(+cb.value) : F.types.delete(+cb.value); apply({fit: true}); });
+ui.types.addEventListener('click', e => {
+  const o = e.target.closest('.only'); if (!o) return;
+  const k = +o.parentElement.dataset.i;
+  F.types = (F.types.size === 1 && F.types.has(k)) ? new Set(DS.types.map((t, i) => i)) : new Set([k]);
+  apply({fit: true});
+});
+$('#tAll').onclick = () => { F.types = new Set(DS.types.map((t, i) => i)); apply({fit: true}); };
+$('#tNone').onclick = () => { F.types = new Set(); apply({fit: true}); };
+ui.y0.addEventListener('input', () => { F.y0 = Math.min(+ui.y0.value, F.y1); apply({fit: false}); });
+ui.y1.addEventListener('input', () => { F.y1 = Math.max(+ui.y1.value, F.y0); apply({fit: false}); });
+ui.y0.addEventListener('change', maybeFit); ui.y1.addEventListener('change', maybeFit);
+$('#inclBy').onchange = e => { F.inclBy = e.target.checked; apply({fit: true}); };
+$('#inclNone').onchange = e => { F.inclNone = e.target.checked; apply({fit: true}); };
+let qT = 0;
+ui.q.addEventListener('input', () => { F.q = ui.q.value.trim().toLowerCase(); ui.qclr.hidden = !ui.q.value; clearTimeout(qT); qT = setTimeout(() => apply({fit: true}), 140); });
+ui.qclr.onclick = () => { ui.q.value = ''; F.q = ''; ui.qclr.hidden = true; ui.q.focus(); apply({fit: true}); };
+$('#sort').onchange = e => { F.sort = e.target.value; renderList(); saveHash(); };
+const resetAll = () => {
+  F = {y0: DS.lo, y1: DS.hi, types: new Set(DS.types.map((t, i) => i)), q: '', inclBy: true, inclNone: true, sort: F.sort};
+  ui.q.value = ''; ui.qclr.hidden = true; apply({fit: true});
+};
+$('#reset').onclick = resetAll; $('#reset2').onclick = resetAll;
+ui.list.addEventListener('click', e => { const b = e.target.closest('.item'); if (b) select(+b.dataset.id, {fly: true}); });
+ui.list.addEventListener('mouseover', e => { const b = e.target.closest('.item'); if (b) pinEls.get(+b.dataset.id)?.classList.add('hl'); });
+ui.list.addEventListener('mouseout', e => { const b = e.target.closest('.item'); if (b) pinEls.get(+b.dataset.id)?.classList.remove('hl'); });
+
+function renderList() {
+  const items = rows.filter(d => d._on), cmp = (a, b) => a.name.localeCompare(b.name);
+  if (F.sort === 'name') items.sort(cmp);
+  else if (F.sort === 'hood') items.sort((a, b) => a.hood.localeCompare(b.hood) || cmp(a, b));
+  else items.sort((a, b) => (a.year ?? 9999) - (b.year ?? 9999) || cmp(a, b));
+  ui.list.innerHTML = items.map(d => {
+    const sub = [d.hood, DS.noTypes ? '' : d.type, hasPos(d) ? '' : 'no map position yet'].filter(Boolean).join(' · ');
+    return `<li><button class="item" type="button" data-id="${d.id}"${d.id === sel ? ' aria-current="true"' : ''}>${swatch(d.t, d.yk === 'by' ? 'hollow' : d.yk === 'none' && DS.hasYear ? 'hollow dashed' : '')}<span class="im"><span class="in">${esc(d.name)}</span><span class="is">${esc(sub)}</span></span>${DS.hasYear ? `<span class="iy">${esc(d.yt)}</span>` : ''}</button></li>`;
+  }).join('');
+  ui.empty.hidden = items.length > 0;
+}
+function renderFacets() {
+  if (!DS.noTypes) {
+    const counts = DS.types.map(() => 0);
+    for (const d of rows) if (passes(d, 'type')) counts[d.ti]++;
+    for (const li of ui.types.children) {
+      const i = +li.dataset.i;
+      li.querySelector('.tc').textContent = counts[i]; li.classList.toggle('zero', counts[i] === 0);
+      li.querySelector('input').checked = F.types.has(i);
+    }
+  }
+  if (!DS.hasYear) return;
+  const bins = Array(DS.bins).fill(0); let nBy = 0, nNone = 0;
+  for (const d of rows) {
+    if (!passes(d, 'year')) continue;
+    if (d.yk === 'none') { nNone++; continue; }
+    if (d.yk === 'by') nBy++;
+    if (d.yk === 'by' && !F.inclBy) continue;
+    bins[clamp(Math.floor((d.year - DS.lo) / DS.step), 0, DS.bins - 1)]++;
+  }
+  const mx = Math.max(1, ...bins);
+  ui.hist.innerHTML = bins.map((n, i) => {
+    const a = DS.lo + i * DS.step, b = a + DS.step - 1, on = !(b < F.y0 || a > F.y1);
+    return `<i class="${on ? 'on' : ''}" style="height:${Math.max(3, Math.round(n / mx * 44))}px" title="${a}–${b}: ${n}"></i>`;
+  }).join('');
+  $('#nBy').textContent = `(${nBy})`; $('#nNone').textContent = `(${nNone})`;
+}
+function renderYear() {
+  if (!DS.hasYear) return;
+  ui.y0.value = F.y0; ui.y1.value = F.y1;
+  const span = DS.hi - DS.lo;
+  ui.fill.style.left = ((F.y0 - DS.lo) / span * 100) + '%'; ui.fill.style.width = ((F.y1 - F.y0) / span * 100) + '%';
+  const full0 = F.y0 === DS.lo, full1 = F.y1 === DS.hi;
+  ui.out.textContent = full0 && full1 ? 'Any year' : full0 ? `Before ${F.y1 + 1}` : full1 ? `${F.y0} and later` : `${F.y0} – ${F.y1}`;
+  [...ui.eras.children].forEach(b => {
+    const on = b.dataset.i === 'all' ? (full0 && full1) : (DS.eras[+b.dataset.i].a === F.y0 && DS.eras[+b.dataset.i].b === F.y1);
+    b.setAttribute('aria-pressed', on);
+  });
+  $('#inclBy').checked = F.inclBy; $('#inclNone').checked = F.inclNone;
+}
+function apply({fit = false} = {}) {
+  let n = 0;
+  for (const d of rows) { d._on = passes(d); if (d._on) n++; }
+  if (sel != null && !rows[sel]._on) { sel = null; $('#card').hidden = true; $('#mapwrap').classList.remove('has-card'); }
+  ui.showing.textContent = n; $('#ofTotal').textContent = `of ${rows.length}`;
+  renderYear(); renderFacets(); renderList();
+  lastZq = -1; render();
+  if (fit && n) maybeFit();
+  saveHash();
+}
+
+/* ---------- URL hash (shareable links) ---------- */
+let hashT = 0;
+function saveHash() {
+  if (!DS) return;
+  clearTimeout(hashT);
+  hashT = setTimeout(() => {
+    const p = new URLSearchParams();
+    if (MODEL.list.length > 1 || MODEL.list[0].slug !== DS.cfg.slug) p.set('d', DS.cfg.slug);
+    if (DS.hasYear && (F.y0 !== DS.lo || F.y1 !== DS.hi)) p.set('y', F.y0 + '-' + F.y1);
+    if (!DS.noTypes && F.types.size !== DS.types.length) p.set('t', [...F.types].map(i => DS.types[i].name).join('~'));
+    if (F.q) p.set('q', F.q);
+    if (!F.inclBy) p.set('by', '0');
+    if (!F.inclNone) p.set('un', '0');
+    if (F.sort !== (DS.hasYear ? 'year' : 'name')) p.set('s', F.sort);
+    if (sel != null) p.set('b', sel);
+    try { history.replaceState(null, '', p.toString() ? '#' + p : location.href.split('#')[0]); } catch {}
+  }, 250);
+}
+function readHash() {
+  const p = new URLSearchParams(location.hash.replace(/^#/, ''));
+  return {d: p.get('d'), y: p.get('y'), t: p.get('t'), q: p.get('q'), by: p.get('by'), un: p.get('un'), s: p.get('s'), b: p.has('b') ? +p.get('b') : null};
+}
+function currentState() {
+  const o = {d: DS.cfg.slug};
+  if (DS.hasYear && (F.y0 !== DS.lo || F.y1 !== DS.hi)) o.y = F.y0 + '-' + F.y1;
+  if (!DS.noTypes && F.types.size !== DS.types.length) o.t = [...F.types].map(i => DS.types[i].name).join('~');
+  if (F.q) o.q = F.q; if (!F.inclBy) o.by = '0'; if (!F.inclNone) o.un = '0'; o.s = F.sort; if (sel != null) o.b = sel;
+  return o;
+}
+
+/* ---------- CSV ---------- */
+$('#csv').onclick = () => {
+  const extraNames = [...new Set(rows.flatMap(d => d.extra.map(e => e[0])))];
+  const head = ['Name', 'Type', 'Year', 'Year basis', 'Address', 'Neighborhood', 'Latitude', 'Longitude', 'Position', 'Confidence', 'Notes', 'Source link', ...extraNames];
+  const out = [head];
+  for (const d of rows.filter(x => x._on)) out.push([d.name, d.type, d.year ?? '', d.yk === 'exact' ? 'Sourced' : d.yk === 'approx' ? 'Approximate' : d.yk === 'by' ? 'Minimum' : 'Unclear', d.addr, d.hood,
+    hasPos(d) ? d.lat.toFixed(6) : '', hasPos(d) ? d.lon.toFixed(6) : '', !hasPos(d) ? '' : d.snapped ? 'Geocoded' : d.approx ? 'Approximate' : '', d.conf, d.notes, d.src, ...extraNames.map(n => (d.extra.find(e => e[0] === n) || [, ''])[1])]);
+  const csv = '﻿' + out.map(r => r.map(v => `"${String(v).replace(/"/g, '""')}"`).join(',')).join('\r\n');
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(new Blob([csv], {type: 'text/csv;charset=utf-8'}));
+  a.download = slugify(DS.cfg.name) + '-map.csv';
+  document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 4000);
+};
+
+/* ====================================================================================
+   Finding map positions from addresses (OpenStreetMap Nominatim, in the viewer's browser)
+   - rows with no latitude/longitude are looked up automatically (up to 30 per visit)
+   - rows marked Position = Approximate can be refined with the "Snap pins" button
+   Results are remembered in this browser only; put real coordinates in the sheet to fix them for everyone.
+   ==================================================================================== */
+const GEOKEY = 'seamap.geo.v1';
+let geoCache = {}; try { geoCache = JSON.parse(lsGet(GEOKEY) || '{}') || {}; } catch { geoCache = {}; }
+let geoRunning = false, geoStop = false;
+const cleanStreet = a => a.replace(/^(\d+)\s*(?:-|–|and|&)\s*\d+\b/i, '$1').replace(/^(\d+)[A-Za-z]\b/, '$1').replace(/\s+1\/2\b/, '').replace(/,?\s*(suite|ste|unit|#)\s*\S+$/i, '');
+const geoQuery = d => d.addr ? [cleanStreet(d.addr), d.place].filter(Boolean).join(', ') : '';
+function applyGeoCache(ds) {
+  for (const d of ds.rows) {
+    if (d.lat != null && !d.approx) continue;
+    const c = geoCache[geoQuery(d)];
+    if (c && c.length === 2) { if (d.lat != null) d.est = [d.lat, d.lon]; d.lat = c[0]; d.lon = c[1]; d.snapped = true; d.approx = false; }
+  }
+}
+const distKm = (a, b, c, d) => { const R = 6371, t = Math.PI / 180, dl = (c - a) * t, dn = (d - b) * t; const h = Math.sin(dl / 2) ** 2 + Math.cos(a * t) * Math.cos(c * t) * Math.sin(dn / 2) ** 2; return 2 * R * Math.asin(Math.sqrt(h)); };
+async function geocode(d) {
+  const q = geoQuery(d); if (!q) return null;
+  const res = await fetch('https://nominatim.openstreetmap.org/search?format=jsonv2&limit=4&countrycodes=us&q=' + encodeURIComponent(q), {headers: {Accept: 'application/json'}});
+  if (!res.ok) { const e = new Error('HTTP ' + res.status); e.status = res.status; throw e; }
+  for (const r of await res.json()) {
+    if (r.category === 'highway' || r.category === 'boundary') continue;
+    const lat = +r.lat, lon = +r.lon; if (!isFinite(lat) || !isFinite(lon)) continue;
+    const ref = d.est || (d.lat != null ? [d.lat, d.lon] : null);
+    if (ref && distKm(lat, lon, ref[0], ref[1]) > 5) continue;
+    return {lat, lon, q};
+  }
+  return null;
+}
+const noticeEl = $('#notice'), noticeMsg = $('#noticeMsg'), hint = $('#noticeHint'), snapBtn = $('#snap'), noticeX = $('#noticeX'), snapBar = $('#snapBar');
+let geoProgress = null;
+function noticeIdle() {
+  if (!DS) return;
+  const na = rows.filter(d => d.approx && !d.snapped && d.addr).length, nm = rows.filter(d => !hasPos(d)).length;
+  snapBar.hidden = true; snapBtn.disabled = false; hint.hidden = true;
+  if (geoProgress) { noticeEl.hidden = false; return; }
+  if (noTilesMode && inFrame && na) {
+    snapBtn.hidden = true; noticeX.hidden = false; noticeEl.hidden = false;
+    noticeMsg.textContent = `${na} pin${na > 1 ? 's are' : ' is'} approximate. Snapping them to addresses needs the page opened in a normal browser tab.`; return;
+  }
+  if (na) {
+    noticeMsg.textContent = `${na} pin${na > 1 ? 's are' : ' is'} approximate.`; snapBtn.textContent = 'Snap pins to addresses'; snapBtn.hidden = false; noticeX.hidden = false;
+    hint.textContent = 'Snap looks up each street address on OpenStreetMap and moves the pin there (about a second per pin; remembered in this browser).'; hint.hidden = false; noticeEl.hidden = false;
+  } else if (nm) {
+    noticeMsg.textContent = `${nm} place${nm > 1 ? 's have' : ' has'} no map position yet. Add an address or latitude/longitude in the sheet.`;
+    snapBtn.hidden = true; noticeX.hidden = false; noticeEl.hidden = false;
+  } else noticeEl.hidden = true;
+}
+noticeX.onclick = () => { noticeEl.hidden = true; };
+let geoTok = 0;
+async function geoRun(list, label) {
+  if (geoRunning) return;
+  geoRunning = true; geoStop = false;
+  const myDS = DS, tok = ++geoTok;
+  let done = 0, ok = 0, miss = 0, netFail = 0, fatal = '';
+  geoProgress = true; snapBtn.hidden = false; snapBtn.textContent = 'Stop'; snapBar.hidden = false; noticeX.hidden = true; noticeEl.hidden = false;
+  const bar = snapBar.firstElementChild;
+  for (const d of list) {
+    if (geoStop || DS !== myDS || tok !== geoTok) break;
+    noticeMsg.textContent = `${label} ${done} of ${list.length}`;
+    bar.style.width = (done / list.length * 100) + '%';
+    try {
+      const r = await geocode(d); netFail = 0;
+      if (r) { if (d.lat != null) d.est = [d.lat, d.lon]; d.lat = r.lat; d.lon = r.lon; d.snapped = true; d.approx = false; geoCache[r.q] = [+r.lat.toFixed(6), +r.lon.toFixed(6)]; ok++; } else miss++;
+    } catch (err) {
+      if (err.status === 429) { fatal = 'OpenStreetMap’s address search asked us to slow down. Try again in a few minutes.'; break; }
+      if (err.status === 403) { fatal = 'OpenStreetMap’s address search declined the request. Try again later.'; break; }
+      if (++netFail >= 3) { fatal = 'Couldn’t reach OpenStreetMap’s address search. Check your connection and try again.'; break; }
+      miss++;
+    }
+    done++;
+    lsSet(GEOKEY, JSON.stringify(geoCache));
+    if (DS === myDS) { lastZq = -1; render(); if (sel != null) select(sel, {fly: false}); }
+    await sleep(1100);
+  }
+  const stopped = geoStop, mine = tok === geoTok;
+  if (mine) { geoRunning = false; geoProgress = null; }
+  if (mine && DS === myDS) {
+    apply({fit: false});
+    if (ok && !userMoved) fitVisible();
+    noticeIdle();
+    if (fatal) { noticeMsg.textContent = fatal; noticeEl.hidden = false; }
+    else if (stopped) noticeMsg.textContent += ' (stopped)';
+    else if (miss) { noticeMsg.textContent = `${noticeMsg.textContent} ${miss} address${miss > 1 ? 'es were' : ' was'} not found.`; noticeEl.hidden = false; }
+  }
+}
+snapBtn.onclick = () => {
+  if (geoRunning) { geoStop = true; snapBtn.textContent = 'Stopping…'; return; }
+  geoRun(rows.filter(d => d.approx && !d.snapped && d.addr), 'Looking up addresses on OpenStreetMap…');
+};
+function startAutoGeocode() {
+  const todo = rows.filter(d => !hasPos(d) && d.addr).slice(0, 30);
+  if (todo.length && !(noTilesMode && inFrame)) geoRun(todo, 'Locating places from their addresses…');
+}
+
+/* ====================================================================================
+   Start-up: show cached or built-in data right away, then refresh from the sheet
+   ==================================================================================== */
+const CACHEKEY = () => 'seamap.cache.v1.' + CFG.sheetId;
+function readCache() { try { return JSON.parse(lsGet(CACHEKEY()) || 'null'); } catch { return null; } }
+function setBanner(msg) { const b = $('#banner'); if (msg) { b.textContent = msg; b.hidden = false; b.dataset.keep = '1'; } else { b.hidden = true; delete b.dataset.keep; } }
+function show(raw, init) {
+  MODEL = makeModel(raw);
+  buildNav();
+  const want = (init && init.d) || (DS && DS.cfg.slug);
+  activate(MODEL.list.some(d => d.slug === want) ? want : MODEL.list[0].slug, init);
+  $('#loading').hidden = true;
+}
+async function boot() {
+  $('#siteTitle').textContent = CFG.title;
+  $('#basemap').value = provider; $('#attrib').innerHTML = PROVIDERS[provider].attrib;
+  measure();
+  const init = readHash();
+  if (!CFG.sheetId) {
+    if (!SAMPLE) { $('#dsTitle').textContent = 'No data yet'; $('#dsDesc').textContent = 'Set sheetId in config.js to show your spreadsheet.'; $('#loading').hidden = true; return; }
+    show(SAMPLE, init);
+    setBanner('Showing the built-in sample data. To show your own spreadsheet, put its ID in config.js.');
+    $('#fine').innerHTML += ' Data: built-in sample.';
+    return;
+  }
+  const cached = readCache();
+  if (cached) show(cached, init);
+  try {
+    const fresh = await fetchModel();
+    const s = JSON.stringify(fresh);
+    if (!cached || JSON.stringify(cached) !== s) { lsSet(CACHEKEY(), s); show(fresh, cached ? currentState() : init); }
+    setBanner('');
+    $('#loading').hidden = true;
+  } catch (e) {
+    console.warn('Sheet load failed:', e);
+    if (cached) setBanner(`Couldn’t refresh from the Google Sheet (${e.message}). Showing the last data this browser loaded.`);
+    else if (SAMPLE) { show(SAMPLE, init); setBanner(`Couldn’t read the Google Sheet (${e.message}) so this is the built-in sample data.`); }
+    else { $('#dsTitle').textContent = 'Couldn’t load the data'; $('#dsDesc').textContent = e.message; $('#loading').hidden = true; }
+  }
+}
+window.__seamap = {get DS() { return DS; }, get rows() { return rows; }, get F() { return F; }, view, activate, select, get tiles() { return {ok: tileOK, err: tileErr, provider}; }, setProvider};
+boot();
+})();
+</script>
+</body>
+</html>
