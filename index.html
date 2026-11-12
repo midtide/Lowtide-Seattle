@@ -110,7 +110,15 @@ output{font-weight:650;font-variant-numeric:tabular-nums}
 #map.dragging{cursor:grabbing}
 #tiles,#markers,#labels{position:absolute;left:0;top:0;width:100%;height:100%}
 #tiles{overflow:hidden;z-index:0}
-#markers{z-index:1}
+#markers{z-index:1;pointer-events:none}
+#markers .pin,#markers .cluster{pointer-events:auto}
+#lines{position:absolute;left:0;top:0;width:100%;height:100%;z-index:1;pointer-events:none;overflow:visible}
+.rt .rtv{fill:none;stroke:var(--c);stroke-width:3.5;stroke-linecap:round;stroke-linejoin:round;opacity:.82;transition:opacity .15s}
+.rt .rth{fill:none;stroke:transparent;stroke-width:16;pointer-events:stroke;cursor:pointer}
+.rt.off{display:none}
+.rt.dim .rtv{opacity:.2}
+.rt.hl .rtv{stroke-width:5.5;opacity:1}
+.rt.sel .rtv{stroke-width:7;opacity:1;filter:drop-shadow(0 1px 2px rgba(0,0,0,.45))}
 #labels{z-index:0;pointer-events:none;display:none;overflow:hidden}
 #map.notiles #labels{display:block}
 .lbl{position:absolute;left:0;top:0;white-space:nowrap;font-size:12px;color:var(--lbl);text-shadow:0 0 3px var(--map-bg),0 0 3px var(--map-bg),0 0 6px var(--map-bg)}
@@ -259,6 +267,7 @@ output{font-weight:650;font-variant-numeric:tabular-nums}
     <div id="map" tabindex="0" role="application" aria-label="Map. Drag to pan, scroll to zoom.">
       <div id="tiles"></div>
       <div id="labels" aria-hidden="true"></div>
+      <svg id="lines" aria-hidden="true"><g id="linesG"></g></svg>
       <div id="markers"></div>
     </div>
     <div class="notice" id="notice" role="status" hidden>
@@ -392,13 +401,13 @@ const col = (tab, ...names) => { const low = tab.labels.map(l => l.toLowerCase()
 function parseDatasetsTab(tab) {
   const iName = col(tab, 'dataset', 'name');
   if (iName < 0) throw new Error('The “Datasets” tab needs a column headed “Dataset”.');
-  const ix = {tab: col(tab, 'tab', 'sheet'), desc: col(tab, 'description'), yl: col(tab, 'year label'), tl: col(tab, 'type label'), eras: col(tab, 'eras'), place: col(tab, 'place', 'default place')};
+  const ix = {tab: col(tab, 'tab', 'sheet'), desc: col(tab, 'description'), yl: col(tab, 'year label'), tl: col(tab, 'type label'), eras: col(tab, 'eras'), place: col(tab, 'place', 'default place'), lines: col(tab, 'lines', 'line file')};
   const g = (r, k) => ix[k] >= 0 ? txt(r[ix[k]]) : '';
   const out = [], seen = new Set();
   for (const r of tab.rows) {
     const name = txt(r[iName]); if (!name) continue;
     let slug = slugify(name); while (seen.has(slug)) slug += '-2'; seen.add(slug);
-    out.push({name, slug, tab: g(r, 'tab') || name, desc: g(r, 'desc'), yearLabel: g(r, 'yl') || 'Year', typeLabel: g(r, 'tl') || 'Type', eras: g(r, 'eras'), place: g(r, 'place')});
+    out.push({name, slug, tab: g(r, 'tab') || name, desc: g(r, 'desc'), yearLabel: g(r, 'yl') || 'Year', typeLabel: g(r, 'tl') || 'Type', eras: g(r, 'eras'), place: g(r, 'place'), lines: g(r, 'lines')});
   }
   return out;
 }
@@ -443,7 +452,13 @@ async function fetchModel() {
   await Promise.all(list.map(async d => {
     try { tabs[d.tab] = await loadTab(d.tab); } catch (e) { errors[d.tab] = e.message; }
   }));
-  return {datasets: dTab, types: typesTab, tabs, errors};
+  const lines = {};
+  await Promise.all(list.filter(d => d.lines).map(async d => {
+    const url = CFG.data + d.lines;
+    try { const res = await fetch(url, {cache: 'no-cache'}); if (!res.ok) throw new Error(`${url} couldn’t be loaded (HTTP ${res.status}).`); lines[d.tab] = await res.json(); }
+    catch (e) { errors[d.tab] = e.message; }
+  }));
+  return {datasets: dTab, types: typesTab, tabs, errors, lines};
 }
 /* the model keeps raw tabs ({labels, rows}); datasets are built from them on demand */
 function makeModel(raw) {
@@ -588,14 +603,14 @@ function flyTo(lat, lng, z, ms = 480) {
   };
   anim = requestAnimationFrame(step);
 }
-function fitPoints(pts, {pad = 70, maxZ = 17, ms = 480} = {}) {
+function fitPoints(pts, {pad = 70, maxZ = 17, ms = 480, bottom = 0} = {}) {
   if (!pts.length) return;
   let la0 = 90, la1 = -90, lo0 = 180, lo1 = -180;
   for (const p of pts) { la0 = Math.min(la0, p.lat); la1 = Math.max(la1, p.lat); lo0 = Math.min(lo0, p.lon); lo1 = Math.max(lo1, p.lon); }
   const a = project(la1, lo0, 0), b = project(la0, lo1, 0);
   const bw = Math.max(b.x - a.x, 1e-9), bh = Math.max(b.y - a.y, 1e-9);
-  const z = clamp(Math.min(Math.log2(Math.max(W - pad * 2, 100) / bw), Math.log2(Math.max(H - pad * 2, 100) / bh)), MINZ, maxZ);
-  const c = unproject((a.x + b.x) / 2 * 2 ** z, (a.y + b.y) / 2 * 2 ** z, z);
+  const z = clamp(Math.min(Math.log2(Math.max(W - pad * 2, 100) / bw), Math.log2(Math.max(H - pad * 2 - bottom, 60) / bh)), MINZ, maxZ);
+  const c = unproject((a.x + b.x) / 2 * 2 ** z, (a.y + b.y) / 2 * 2 ** z + bottom / 2, z);
   flyTo(c.lat, c.lng, z, ms);
 }
 
@@ -720,7 +735,7 @@ function rebuildMarkers() {
   const z = view.z, useCluster = z < 18.4, R = z >= 17 ? 30 : 46;
   const shown = new Set(), cl = [];
   for (const d of rows) {
-    if (!d._on || !hasPos(d)) continue;
+    if (!d._on || !hasPos(d) || d.path) continue;
     if (!useCluster || d.id === sel) { shown.add(d.id); continue; }
     const p = project(d.lat, d.lon, z);
     let best = null, bd = R;
@@ -758,6 +773,54 @@ function rebuildMarkers() {
     el.classList.toggle('off', !on); el.classList.toggle('sel', d.id === sel); el.classList.toggle('approx', !!d.approx);
     if (on) live.push({el, lat: d.lat, lng: d.lon});
   }
+  updateLines();
+}
+/* ---------- route lines: rows whose Name matches a feature in the dataset's line file ---------- */
+const SVGNS = 'http://www.w3.org/2000/svg', linesG = $('#linesG'), lineEls = new Map();
+function attachLines(ds, gj) {
+  if (!gj || !Array.isArray(gj.features)) return;
+  const by = new Map();
+  for (const f of gj.features) {
+    const n = txt(f.properties && f.properties.name).toLowerCase(), g = f.geometry; if (!n || !g) continue;
+    const parts = g.type === 'LineString' ? [g.coordinates] : g.type === 'MultiLineString' ? g.coordinates : [];
+    if (!by.has(n)) by.set(n, []); by.get(n).push(...parts.filter(p => p.length > 1));
+  }
+  for (const d of ds.rows) {
+    const parts = by.get(d.name.toLowerCase()); if (!parts || !parts.length) continue;
+    d.path = parts.map(p => p.map(([lon, lat]) => [lat, lon]));
+    if (d.lat == null) { const all = d.path.flat(), m = all[Math.floor(all.length / 2)]; d.lat = m[0]; d.lon = m[1]; }
+    d.wpts = d.path.map(p => p.map(([la, lo]) => project(la, lo, 0)));  /* world coords at zoom 0; scaled per frame */
+    d.search += ' ' + d.extra.map(e => e[1]).join(' ').toLowerCase();
+  }
+}
+function buildLines() {
+  linesG.textContent = ''; lineEls.clear();
+  for (const d of rows) {
+    if (!d.wpts) continue;
+    const g = document.createElementNS(SVGNS, 'g'); g.setAttribute('class', 'rt'); g.style.setProperty('--c', d.t.color);
+    const vis = document.createElementNS(SVGNS, 'path'); vis.setAttribute('class', 'rtv');
+    const hit = vis.cloneNode(); hit.setAttribute('class', 'rth');
+    const t = document.createElementNS(SVGNS, 'title'); t.textContent = d.name; hit.appendChild(t);
+    hit.addEventListener('click', e => { e.stopPropagation(); if (justDragged) return; select(d.id, {fly: false, scroll: true}); });
+    hit.addEventListener('mouseenter', () => hover(d.id, true));
+    hit.addEventListener('mouseleave', () => hover(d.id, false));
+    g.append(vis, hit); g._d = d; g._p = [vis, hit]; linesG.appendChild(g); lineEls.set(d.id, g);
+  }
+}
+function updateLines() {
+  const lineSel = sel != null && lineEls.has(sel);
+  for (const [id, g] of lineEls) { g.classList.toggle('off', !rows[id]._on); g.classList.toggle('sel', id === sel); g.classList.toggle('dim', lineSel && id !== sel); }
+  if (lineSel) linesG.appendChild(lineEls.get(sel));
+}
+/* screen coordinates are recomputed each frame in double precision (SVG transforms lose precision at street zoom) */
+function positionLines() {
+  if (!lineEls.size) return;
+  const c = project(view.lat, view.lng, view.z), k = 2 ** view.z, ox = W / 2 - c.x, oy = H / 2 - c.y;
+  for (const g of lineEls.values()) {
+    if (!g._d._on) continue;
+    const dd = g._d.wpts.map(p => 'M' + p.map(q => (q.x * k + ox).toFixed(1) + ' ' + (q.y * k + oy).toFixed(1)).join('L')).join('');
+    g._p[0].setAttribute('d', dd); g._p[1].setAttribute('d', dd);
+  }
 }
 function positionMarkers() {
   const c = project(view.lat, view.lng, view.z);
@@ -766,6 +829,7 @@ function positionMarkers() {
     m.el.style.transform = `translate3d(${x.toFixed(1)}px,${y.toFixed(1)}px,0)`;
     m.el.style.display = (x < -60 || y < -60 || x > W + 60 || y > H + 60) ? 'none' : '';
   }
+  positionLines();
 }
 function render() {
   const zq = Math.round(view.z * 4);
@@ -843,7 +907,7 @@ $('#zin').onclick = () => stepZoom(1);
 $('#zout').onclick = () => stepZoom(-1);
 $('#fit').onclick = () => { userMoved = false; fitVisible(); };
 $('#basemap').onchange = e => setProvider(e.target.value);
-const visiblePts = () => rows.filter(d => d._on && hasPos(d)).map(d => ({lat: d.lat, lon: d.lon}));
+const visiblePts = () => rows.filter(d => d._on && hasPos(d)).flatMap(d => d.path ? d.path.flat().filter((p, i, a) => i % 4 === 0 || i === a.length - 1).map(([lat, lon]) => ({lat, lon})) : [{lat: d.lat, lon: d.lon}]);
 function fitVisible(ms) { const p = visiblePts(); if (p.length) fitPoints(p, {pad: 60, maxZ: 17, ms}); }
 function maybeFit() {
   if (!userMoved) { fitVisible(); return; }
@@ -855,6 +919,7 @@ function maybeFit() {
 /* ---------- selection + card ---------- */
 function hover(id, on) {
   pinEls.get(id)?.classList.toggle('hl', on);
+  lineEls.get(id)?.classList.toggle('hl', on);
   for (const b of $('#list').querySelectorAll('.item')) if (b.dataset.id === String(id)) b.classList.toggle('hl', on);
 }
 const confColor = c => /^high/i.test(c) ? '#2e9b5b' : /^med/i.test(c) ? '#d9a21b' : /^low/i.test(c) ? '#d2503c' : '#8a8170';
@@ -899,7 +964,8 @@ function select(id, {fly = true, scroll = false} = {}) {
     <p class="pos">${d.unmapped ? 'Not shown on the map.' : !hasPos(d) ? 'No map position yet: add an address or latitude/longitude in the data.' : d.snapped ? 'Pin placed from an OpenStreetMap address match.' : d.approx ? 'Pin position is approximate. Use “Snap pins to addresses” to refine it.' : ''}</p>`;
   card.hidden = false;
   $('.x', card).onclick = () => select(null);
-  if (hasPos(d)) {
+  if (d.path) { if (fly) fitPoints(d.path.flat().map(([lat, lon]) => ({lat, lon})), {pad: 40, maxZ: 16, bottom: card.offsetWidth < W * 0.6 ? 0 : card.offsetHeight + 34}); }
+  else if (hasPos(d)) {
     const z = fly ? Math.max(view.z, 16.5) : view.z;
     if (fly || needsMove(d)) { const p = project(d.lat, d.lon, z), ll = unproject(p.x, p.y + pinOffset(), z); flyTo(ll.lat, ll.lng, z, fly ? 480 : 350); }
   }
@@ -941,6 +1007,7 @@ function activate(slug, init = {}) {
   if (!ds) {
     const tab = MODEL.raw.tabs[cfg.tab];
     ds = tab ? buildDataset(cfg, tab, MODEL.typesCfg) : buildDataset(cfg, {labels: ['Name'], rows: []}, MODEL.typesCfg);
+    attachLines(ds, MODEL.raw.lines && MODEL.raw.lines[cfg.tab]);
     applyGeoCache(ds);
     MODEL.built.set(cfg.slug, ds);
   }
@@ -964,7 +1031,7 @@ function activate(slug, init = {}) {
   $('#secYear').hidden = !ds.hasYear; $('#secType').hidden = ds.noTypes;
   $('#h-year').textContent = cfg.yearLabel; $('#h-type').textContent = cfg.typeLabel;
   $('#lblBy').hidden = !ds.hasMin; $('#lblNone').hidden = !ds.hasNone;
-  buildTypeUI(); buildYearUI(); buildPins();
+  buildTypeUI(); buildYearUI(); buildPins(); buildLines();
   apply({fit: false});
   const pts = visiblePts();
   fitPoints(pts.length ? pts : [{lat: CFG.center[0], lon: CFG.center[1]}], {pad: 50, maxZ: pts.length ? 17 : 12, ms: init.noFly ? 0 : 450});
@@ -1021,7 +1088,7 @@ ui.list.addEventListener('mouseover', e => { const b = e.target.closest('.item')
 ui.list.addEventListener('mouseout', e => { const b = e.target.closest('.item'); if (b) pinEls.get(+b.dataset.id)?.classList.remove('hl'); });
 
 function renderList() {
-  const items = rows.filter(d => d._on), cmp = (a, b) => a.name.localeCompare(b.name);
+  const items = rows.filter(d => d._on), cmp = (a, b) => a.name.localeCompare(b.name, undefined, {numeric: true});
   if (F.sort === 'name') items.sort(cmp);
   else if (F.sort === 'hood') items.sort((a, b) => a.hood.localeCompare(b.hood) || cmp(a, b));
   else items.sort((a, b) => (a.year ?? 9999) - (b.year ?? 9999) || cmp(a, b));

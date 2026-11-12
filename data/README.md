@@ -9,6 +9,7 @@ The map page reads these CSV files. Edit a file (on GitHub: open it → pencil i
 | `datasets.csv` | One row per dataset. Each becomes a button at the top of the map. |
 | `types.csv` | Optional. Color and pin shape for each type in a dataset. Types missing here still work; the page picks colors for them. |
 | `old-businesses.csv`, `national-register.csv`, `public-staircases.csv` | One file per dataset, one row per place. |
+| `streetcars-1931.csv`, `streetcars-1931.geojson` | A line dataset: one row per route in the CSV, and the route lines in the GeoJSON file. |
 | `template.csv` | Column headings to copy when starting a new dataset. |
 | `seattle-map-data.xlsx` | The original starter workbook, kept only for the optional Google Sheets setup. The map doesn't read it. |
 
@@ -19,6 +20,10 @@ A dataset's file name comes from its **Tab** in `datasets.csv`, lower-cased with
 1. Copy `template.csv` to a new file, for example `public-art.csv`, and fill in rows. Only **Name** is required, plus either an **Address** or a **Latitude** and **Longitude**.
 2. Add a row to `datasets.csv`: **Dataset** (the button label), **Tab** (`Public art`, matching the file name), and optionally a **Description**, **Year label**, **Type label**, **Eras** (comma-separated era start years) and **Place**.
 3. Optional: add rows to `types.csv` to choose colors (`#RRGGBB`) and shapes for its types.
+
+## Line datasets (routes instead of places)
+
+A dataset can show lines instead of pins. Put the name of a GeoJSON file from this folder in the **Lines** column of `datasets.csv`. Each feature's `name` property must match a row's **Name** exactly; that row's line is then drawn on the map, can be clicked, and fills the detail card from the CSV. Rows with no matching feature fall back to an ordinary pin. LineString and MultiLineString geometries both work.
 
 ## Dataset columns
 

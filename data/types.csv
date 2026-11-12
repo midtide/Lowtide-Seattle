@@ -24,3 +24,5 @@ Public staircases,20–49 steps,#0072B2,triangle
 Public staircases,50–99 steps,#CC79A7,square
 Public staircases,100+ steps,#D55E00,hexagon
 Public staircases,Steps not recorded,#8C8C8C,cross
+Streetcars 1931,Streetcar,#D55E00,circle
+Streetcars 1931,Cable car,#0072B2,square
