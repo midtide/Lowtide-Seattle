@@ -31,7 +31,7 @@ Headings can be in any order. Extra columns are fine.
 - **Year label**: optional text to show instead of the year, for example "c. 1920s".
 - **Address, City, State, Neighborhood**: used for search, the detail card and finding map positions.
 - **Latitude, Longitude**: plain decimal numbers (47.6097, -122.3331). If they're empty, the page looks the address up on OpenStreetMap in each visitor's browser.
-- **Position**: Approximate if the coordinates are rough guesses (the page then offers to snap those pins to the address). Geocoded means the coordinates came from an address lookup.
+- **Position**: Approximate if the coordinates are rough guesses (the page then offers to snap those pins to the address). Geocoded means the coordinates came from an address lookup. Unmapped means the place deliberately has no map position (say why in Notes); it stays in the list but gets no pin and no "no map position yet" notice.
 - **Confidence**: High, Medium or Low (shown as a colored chip on the detail card).
 - **Notes, Source link**: shown on the detail card.
 - Any other column (Phone, Website, Owner…) is shown on the detail card automatically. A cell that is a web address becomes a link.

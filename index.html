@@ -507,6 +507,7 @@ function buildDataset(cfg, tab, typesCfg) {
     d.lat = la != null && lo != null && Math.abs(la) <= 90 && Math.abs(lo) <= 180 && (la || lo) ? la : null;
     d.lon = d.lat == null ? null : lo;
     d.approx = d.lat != null && /^(approx|estimat)/i.test(txt(get(r, 'pos')));
+    d.unmapped = d.lat == null && /^unmapped/i.test(txt(get(r, 'pos')));
     d.snapped = false;
     d.extra = extras.map(([i, l]) => [l, txt(r[i])]).filter(([, v]) => v !== '');
     d.search = [d.name, d.addr, d.hood, d.type, d.place].join(' ').toLowerCase();
@@ -894,7 +895,7 @@ function select(id, {fly = true, scroll = false} = {}) {
       ${isUrl(d.src) ? `<a href="${esc(d.src)}" target="_blank" rel="noopener noreferrer">Source: ${esc(host || 'link')} ↗</a>` : ''}
       <a href="${esc(link)}" target="_blank" rel="noopener noreferrer">${hasPos(d) ? 'Open in OpenStreetMap' : 'Find on OpenStreetMap'} ↗</a>
     </div>
-    <p class="pos">${!hasPos(d) ? 'No map position yet: add an address or latitude/longitude in the data.' : d.snapped ? 'Pin placed from an OpenStreetMap address match.' : d.approx ? 'Pin position is approximate. Use “Snap pins to addresses” to refine it.' : ''}</p>`;
+    <p class="pos">${d.unmapped ? 'Not shown on the map.' : !hasPos(d) ? 'No map position yet: add an address or latitude/longitude in the data.' : d.snapped ? 'Pin placed from an OpenStreetMap address match.' : d.approx ? 'Pin position is approximate. Use “Snap pins to addresses” to refine it.' : ''}</p>`;
   card.hidden = false;
   $('.x', card).onclick = () => select(null);
   if (hasPos(d)) {
@@ -1115,7 +1116,7 @@ $('#csv').onclick = () => {
   const head = ['Name', 'Type', 'Year', 'Year basis', 'Address', 'Neighborhood', 'Latitude', 'Longitude', 'Position', 'Confidence', 'Notes', 'Source link', ...extraNames];
   const out = [head];
   for (const d of rows.filter(x => x._on)) out.push([d.name, d.type, d.year ?? '', d.yk === 'exact' ? 'Sourced' : d.yk === 'approx' ? 'Approximate' : d.yk === 'by' ? 'Minimum' : 'Unclear', d.addr, d.hood,
-    hasPos(d) ? d.lat.toFixed(6) : '', hasPos(d) ? d.lon.toFixed(6) : '', !hasPos(d) ? '' : d.snapped ? 'Geocoded' : d.approx ? 'Approximate' : '', d.conf, d.notes, d.src, ...extraNames.map(n => (d.extra.find(e => e[0] === n) || [, ''])[1])]);
+    hasPos(d) ? d.lat.toFixed(6) : '', hasPos(d) ? d.lon.toFixed(6) : '', !hasPos(d) ? (d.unmapped ? 'Unmapped' : '') : d.snapped ? 'Geocoded' : d.approx ? 'Approximate' : '', d.conf, d.notes, d.src, ...extraNames.map(n => (d.extra.find(e => e[0] === n) || [, ''])[1])]);
   const csv = '﻿' + out.map(r => r.map(v => `"${String(v).replace(/"/g, '""')}"`).join(',')).join('\r\n');
   const a = document.createElement('a');
   a.href = URL.createObjectURL(new Blob([csv], {type: 'text/csv;charset=utf-8'}));
@@ -1159,7 +1160,7 @@ const noticeEl = $('#notice'), noticeMsg = $('#noticeMsg'), hint = $('#noticeHin
 let geoProgress = null;
 function noticeIdle() {
   if (!DS) return;
-  const na = rows.filter(d => d.approx && !d.snapped && d.addr).length, nm = rows.filter(d => !hasPos(d)).length;
+  const na = rows.filter(d => d.approx && !d.snapped && d.addr).length, nm = rows.filter(d => !hasPos(d) && !d.unmapped).length;
   snapBar.hidden = true; snapBtn.disabled = false; hint.hidden = true;
   if (geoProgress) { noticeEl.hidden = false; return; }
   if (noTilesMode && inFrame && na) {
@@ -1217,7 +1218,7 @@ snapBtn.onclick = () => {
   geoRun(rows.filter(d => d.approx && !d.snapped && d.addr), 'Looking up addresses on OpenStreetMap…');
 };
 function startAutoGeocode() {
-  const todo = rows.filter(d => !hasPos(d) && d.addr).slice(0, 30);
+  const todo = rows.filter(d => !hasPos(d) && !d.unmapped && d.addr).slice(0, 30);
   if (todo.length && !(noTilesMode && inFrame)) geoRun(todo, 'Locating places from their addresses…');
 }
 
