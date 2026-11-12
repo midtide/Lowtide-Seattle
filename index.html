@@ -181,6 +181,10 @@ output{font-weight:650;font-variant-numeric:tabular-nums}
 .card .links{display:flex;flex-wrap:wrap;gap:8px 14px}
 .card .links a{color:var(--accent);font-weight:600;text-underline-offset:2px}
 .card .pos{margin:10px 0 0;font-size:12px;color:var(--muted)}
+.card figure{margin:2px 0 10px}
+.card figure img{display:block;width:100%;height:auto;aspect-ratio:1;border-radius:8px;border:1px solid var(--line);background:var(--soft)}
+.card figcaption{margin-top:5px;font-size:11.5px;line-height:1.35;color:var(--muted)}
+.card figcaption a{color:var(--accent)}
 
 @media (max-width:820px){
   .app{grid-template-columns:1fr;grid-template-rows:54vh minmax(0,1fr);grid-template-rows:54dvh minmax(0,1fr)}
@@ -947,7 +951,11 @@ function select(id, {fly = true, scroll = false} = {}) {
   const q = encodeURIComponent([d.addr, d.place].filter(Boolean).join(', ') || d.name);
   const link = hasPos(d) ? `https://www.openstreetmap.org/?mlat=${d.lat}&mlon=${d.lon}#map=18/${d.lat}/${d.lon}` : `https://www.openstreetmap.org/search?query=${q}`;
   let host = ''; try { host = new URL(d.src).hostname.replace(/^www\./, ''); } catch {}
-  const extras = d.extra.map(([l, v]) => isUrl(v) ? `<div><a href="${esc(v)}" target="_blank" rel="noopener noreferrer">${esc(l)} ↗</a></div>` : `<div>${esc(l)}: ${esc(v)}</div>`).join('');
+  /* optional image columns: "Image" (a file in the data folder or a URL), "Image credit", "Image link" */
+  const xv = re => (d.extra.find(([l]) => re.test(l)) || [, ''])[1];
+  const imgSrc = xv(/^image$/i), imgCredit = xv(/^image credit$/i), imgLink = xv(/^image link$/i);
+  const figure = imgSrc ? `<figure><img src="${esc(isUrl(imgSrc) ? imgSrc : CFG.data + imgSrc)}" alt="${esc(imgCredit || 'Image of ' + d.name)}" loading="lazy" width="480" height="480">${imgCredit || imgLink ? `<figcaption>${esc(imgCredit)}${isUrl(imgLink) ? ` · <a href="${esc(imgLink)}" target="_blank" rel="noopener noreferrer">Full sheet ↗</a>` : ''}</figcaption>` : ''}</figure>` : '';
+  const extras = d.extra.filter(([l]) => !/^image( credit| link)?$/i.test(l)).map(([l, v]) => isUrl(v) ? `<div><a href="${esc(v)}" target="_blank" rel="noopener noreferrer">${esc(l)} ↗</a></div>` : `<div>${esc(l)}: ${esc(v)}</div>`).join('');
   card.innerHTML = `
     <button class="x" type="button" aria-label="Close details">×</button>
     <div class="chips">${DS.noTypes ? '' : `<span class="chip">${swatch(d.t)}${esc(d.type)}</span>`}
@@ -956,6 +964,7 @@ function select(id, {fly = true, scroll = false} = {}) {
     ${DS.hasYear ? `<p class="yr"><b>${esc(d.yt)}</b>${esc(yearNote(d))}</p>` : ''}
     ${d.addr || d.hood ? `<p class="addr">${esc(d.addr)}${d.addr && d.place ? ', ' + esc(d.place) : ''}${d.hood ? ` <span>${d.addr ? '· ' : ''}${esc(d.hood)}</span>` : ''}</p>` : ''}
     ${d.notes ? `<p class="notes">${esc(d.notes)}</p>` : ''}
+    ${figure}
     ${extras ? `<div class="meta">${extras}</div>` : ''}
     <div class="links">
       ${isUrl(d.src) ? `<a href="${esc(d.src)}" target="_blank" rel="noopener noreferrer">Source: ${esc(host || 'link')} ↗</a>` : ''}

@@ -28,6 +28,9 @@ A dataset can show lines instead of pins. Put the name of a GeoJSON file from th
 
 ## Dataset columns
 
+Optional image columns, for any dataset: **Image** (a file in this folder, such as `topo/burton.jpg`, or a web address), **Image credit** (shown under the image) and **Image link** (a “Full sheet” link). The Mosquito Fleet pins use them for crops of old USGS topographic sheets, kept in `topo/`.
+
+
 Headings can be in any order. Extra columns are fine.
 
 - **Name**: required.
