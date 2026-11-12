@@ -10,7 +10,7 @@
  *          (a dataset can override it with its own "Place" in the Datasets tab).
  */
 window.MAP_CONFIG = {
-  sheetId: '1it3mqHtfx_E8hj1sr4Ya8o0iJtDDhwML',
+  sheetId: '1LxOXcbu4LCYcCzlOG8Y-eE7vWRC32TWVTUzJc7rTnEo',
   title: 'Seattle, mapped',
   center: [47.6205, -122.335],
   place: 'Seattle, WA'
