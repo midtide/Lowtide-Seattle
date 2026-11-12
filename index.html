@@ -1127,7 +1127,7 @@ $('#csv').onclick = () => {
    Finding map positions from addresses (OpenStreetMap Nominatim, in the viewer's browser)
    - rows with no latitude/longitude are looked up automatically (up to 30 per visit)
    - rows marked Position = Approximate can be refined with the "Snap pins" button
-   Results are remembered in this browser only; put real coordinates in the sheet to fix them for everyone.
+   Results are remembered in this browser only; put real coordinates in the data to fix them for everyone.
    ==================================================================================== */
 const GEOKEY = 'seamap.geo.v1';
 let geoCache = {}; try { geoCache = JSON.parse(lsGet(GEOKEY) || '{}') || {}; } catch { geoCache = {}; }
@@ -1170,7 +1170,7 @@ function noticeIdle() {
     noticeMsg.textContent = `${na} pin${na > 1 ? 's are' : ' is'} approximate.`; snapBtn.textContent = 'Snap pins to addresses'; snapBtn.hidden = false; noticeX.hidden = false;
     hint.textContent = 'Snap looks up each street address on OpenStreetMap and moves the pin there (about a second per pin; remembered in this browser).'; hint.hidden = false; noticeEl.hidden = false;
   } else if (nm) {
-    noticeMsg.textContent = `${nm} place${nm > 1 ? 's have' : ' has'} no map position yet. Add an address or latitude/longitude in the sheet.`;
+    noticeMsg.textContent = `${nm} place${nm > 1 ? 's have' : ' has'} no map position yet. Add an address or latitude/longitude in the data.`;
     snapBtn.hidden = true; noticeX.hidden = false; noticeEl.hidden = false;
   } else noticeEl.hidden = true;
 }
