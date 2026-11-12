@@ -10,6 +10,7 @@ The map page reads these CSV files. Edit a file (on GitHub: open it → pencil i
 | `types.csv` | Optional. Color and pin shape for each type in a dataset. Types missing here still work; the page picks colors for them. |
 | `old-businesses.csv`, `national-register.csv`, `public-staircases.csv` | One file per dataset, one row per place. |
 | `streetcars-1931.csv`, `streetcars-1931.geojson` | A line dataset: one row per route in the CSV, and the route lines in the GeoJSON file. |
+| `mosquito-fleet-1908.csv`, `mosquito-fleet-1908.geojson` | Lines and pins together: steamer runs (matched to lines in the GeoJSON) and ports of call (with latitude and longitude). |
 | `template.csv` | Column headings to copy when starting a new dataset. |
 | `seattle-map-data.xlsx` | The original starter workbook, kept only for the optional Google Sheets setup. The map doesn't read it. |
 

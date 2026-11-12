@@ -319,7 +319,7 @@ const SHAPES = {
 };
 const SHAPE_NAMES = Object.keys(SHAPES);
 const PALETTE = ['#D55E00','#0072B2','#009E73','#CC79A7','#E69F00','#56B4E9','#44546A','#8C8C8C'];
-const MINZ = 10, MAXZ = 19;
+const MINZ = 7, MAXZ = 19;
 const inFrame = (() => { try { return window.self !== window.top; } catch { return true; } })();
 const reduceMotion = matchMedia('(prefers-reduced-motion: reduce)').matches;
 /* orientation labels, used only when no basemap tiles can load: [text, lat, lon, kind, min zoom] (approximate) */
