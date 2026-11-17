@@ -416,13 +416,13 @@ const col = (tab, ...names) => { const low = tab.labels.map(l => l.toLowerCase()
 function parseDatasetsTab(tab) {
   const iName = col(tab, 'dataset', 'name');
   if (iName < 0) throw new Error('The “Datasets” tab needs a column headed “Dataset”.');
-  const ix = {tab: col(tab, 'tab', 'sheet'), desc: col(tab, 'description'), yl: col(tab, 'year label'), tl: col(tab, 'type label'), eras: col(tab, 'eras'), place: col(tab, 'place', 'default place'), lines: col(tab, 'lines', 'line file')};
+  const ix = {tab: col(tab, 'tab', 'sheet'), desc: col(tab, 'description'), yl: col(tab, 'year label'), tl: col(tab, 'type label'), eras: col(tab, 'eras'), place: col(tab, 'place', 'default place'), lines: col(tab, 'lines', 'line file'), basemap: col(tab, 'basemap')};
   const g = (r, k) => ix[k] >= 0 ? txt(r[ix[k]]) : '';
   const out = [], seen = new Set();
   for (const r of tab.rows) {
     const name = txt(r[iName]); if (!name) continue;
     let slug = slugify(name); while (seen.has(slug)) slug += '-2'; seen.add(slug);
-    out.push({name, slug, tab: g(r, 'tab') || name, desc: g(r, 'desc'), yearLabel: g(r, 'yl') || 'Year', typeLabel: g(r, 'tl') || 'Type', eras: g(r, 'eras'), place: g(r, 'place'), lines: g(r, 'lines')});
+    out.push({name, slug, tab: g(r, 'tab') || name, desc: g(r, 'desc'), yearLabel: g(r, 'yl') || 'Year', typeLabel: g(r, 'tl') || 'Type', eras: g(r, 'eras'), place: g(r, 'place'), lines: g(r, 'lines'), basemap: g(r, 'basemap').toLowerCase()});
   }
   return out;
 }
@@ -636,8 +636,31 @@ const PROVIDERS = {
          attrib: '© <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a> contributors'},
   carto:{label: 'OSM data · CARTO style', max: 19,
          url: (z, x, y) => `https://${'abcd'[(x + y) & 3]}.basemaps.cartocdn.com/rastertiles/voyager/${z}/${x}/${y}${devicePixelRatio > 1.4 ? '@2x' : ''}.png`,
-         attrib: '© <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a> contributors © <a href="https://carto.com/attributions" target="_blank" rel="noopener">CARTO</a>'}
+         attrib: '© <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a> contributors © <a href="https://carto.com/attributions" target="_blank" rel="noopener">CARTO</a>'},
+  /* NOAA raster nautical charts, served as a PMTiles archive by CharTiles; only offered on datasets whose "Basemap" column says "chart" */
+  chart:{label: 'Nautical chart (NOAA)', max: 16, under: 'osm',
+         pm: 'https://chartiles-data.ivanstorck.workers.dev/charts/ee2129ccda808ba206e8976a0a5b3d6b243ec027f06a9e26259cbd13f7d8938f.pmtiles',
+         attrib: 'Chart <a href="https://www.nauticalcharts.noaa.gov/" target="_blank" rel="noopener">NOAA</a> via <a href="https://chartiles.com/" target="_blank" rel="noopener">CharTiles</a>, not for navigation · © <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a>'}
 };
+/* PMTiles reader, loaded only when a chart basemap is first used */
+let pmArchive = null;
+function pmGet() {
+  if (pmArchive) return pmArchive;
+  pmArchive = new Promise((ok, bad) => {
+    const sc = document.createElement('script');
+    sc.src = 'https://cdn.jsdelivr.net/npm/pmtiles@3.2.1/dist/pmtiles.js';
+    sc.onload = () => ok(new window.pmtiles.PMTiles(PROVIDERS.chart.pm));
+    sc.onerror = () => { pmArchive = null; bad(new Error('pmtiles')); };
+    document.head.appendChild(sc);
+  });
+  return pmArchive;
+}
+let userProvider = null;   // the basemap the viewer picked, restored when leaving a chart dataset
+function syncBasemapChoices(allowChart) {
+  const sel = $('#basemap'), has = !!sel.querySelector('option[value="chart"]');
+  if (allowChart && !has) sel.insertAdjacentHTML('afterbegin', '<option value="chart">Nautical chart (NOAA)</option>');
+  if (!allowChart && has) sel.querySelector('option[value="chart"]').remove();
+}
 let provider = location.protocol === 'file:' ? 'carto' : 'osm';
 let noTilesMode = false, tileCache = new Map(), tileOK = 0, tileErr = 0, autoSwitched = false, toastTimer = 0, tileState = null;
 function setProvider(p, {auto = false} = {}) {
@@ -672,20 +695,25 @@ function toast(msg, ms = 5000) {
   clearTimeout(toastTimer); toastTimer = setTimeout(() => { t.hidden = true; }, ms);
 }
 function renderTiles() {
-  const zi = clamp(Math.round(view.z), 2, PROVIDERS[provider].max), scale = 2 ** (view.z - zi), n = 2 ** zi;
+  /* a chart basemap has gaps (other countries, rivers, small-scale bands), so a street map is drawn underneath it */
+  const layers = PROVIDERS[provider].under ? [PROVIDERS[provider].under, provider] : [provider];
+  const need = new Set(); let zMain = 0;
+  layers.forEach((lp, li) => {
+  const P = PROVIDERS[lp], main = lp === provider;
+  const zi = clamp(Math.round(view.z), 2, P.max), scale = 2 ** (view.z - zi), n = 2 ** zi;
+  if (main) zMain = zi;
   const cw = project(view.lat, view.lng, zi);
   const x0 = Math.floor((cw.x - W / 2 / scale) / 256), x1 = Math.floor((cw.x + W / 2 / scale) / 256);
   const y0 = Math.floor((cw.y - H / 2 / scale) / 256), y1 = Math.floor((cw.y + H / 2 / scale) / 256);
-  const need = new Set();
   for (let ty = y0; ty <= y1; ty++) {
     if (ty < 0 || ty >= n) continue;
     for (let tx = x0; tx <= x1; tx++) {
-      const wx = ((tx % n) + n) % n, key = `${provider}/${zi}/${tx}/${ty}`;
+      const wx = ((tx % n) + n) % n, key = `${lp}/${zi}/${tx}/${ty}`;
       need.add(key);
       if (tileCache.has(key)) continue;
       const img = new Image();
       img.className = 'tile'; img.alt = ''; img.decoding = 'async'; img.draggable = false; img.style.opacity = 0;
-      const rec = {el: img, z: zi, x: tx, y: ty, loaded: false, p: provider};
+      const rec = {el: img, z: zi, x: tx, y: ty, loaded: false, p: lp, layer: li};
       img.onload = () => { rec.loaded = true; img.style.opacity = 1; if (rec.p === provider) tileOK++; if (noTilesMode) setNoTiles(false); pruneTiles(); };
       img.onerror = () => {
         img.remove(); rec.failed = true;
@@ -695,26 +723,39 @@ function renderTiles() {
         if (tileOK === 0 && tileErr >= 4) {
           if (provider === 'osm' && !autoSwitched) { autoSwitched = true; setProvider('carto', {auto: true}); }
           else if (provider === 'carto' && !noTilesMode) setNoTiles(true);
+          else if (provider === 'chart') { setProvider(userProvider || 'osm'); toast('The nautical chart tiles couldn’t be loaded, so the map is showing OpenStreetMap instead.', 9000); }
         }
       };
-      img.src = PROVIDERS[provider].url(zi, wx, ty);
+      if (P.pm) {
+        pmGet().then(a => a.getZxy(zi, wx, ty)).then(r => {
+          if (tileCache.get(key) !== rec) return;
+          if (!r || !r.data || r.data.byteLength < 300) { rec.loaded = true; rec.empty = true; img.remove(); if (rec.p === provider) tileOK++; pruneTiles(); return; }   // blank: outside chart coverage
+          const u = URL.createObjectURL(new Blob([r.data], {type: 'image/png'}));
+          img.addEventListener('load', () => URL.revokeObjectURL(u), {once: true}); img.src = u;
+        }).catch(() => img.onerror());
+      } else img.src = P.url(zi, wx, ty);
       tilesEl.appendChild(img); tileCache.set(key, rec);
     }
   }
+  });
   for (const [key, rec] of tileCache) {
-    if (rec.z === zi && !need.has(key)) { rec.el.remove(); tileCache.delete(key); continue; }
-    const s2 = 2 ** (view.z - rec.z), c2 = rec.z === zi ? cw : project(view.lat, view.lng, rec.z);
+    const P = PROVIDERS[rec.p], zi = P ? clamp(Math.round(view.z), 2, P.max) : -1;
+    if (!layers.includes(rec.p) || (rec.z === zi && !need.has(key))) { rec.el.remove(); tileCache.delete(key); continue; }
+    const s2 = 2 ** (view.z - rec.z), c2 = project(view.lat, view.lng, rec.z);
     rec.el.style.transform = `translate3d(${(rec.x * 256 - c2.x) * s2 + W / 2}px,${(rec.y * 256 - c2.y) * s2 + H / 2}px,0) scale(${s2})`;
-    rec.el.style.zIndex = rec.z === zi ? 2 : 1;
+    rec.el.style.zIndex = (rec.layer || 0) * 10 + (rec.z === zi ? 2 : 1);
   }
-  tileState = {zi, need};
+  tileState = {zi: zMain, need};
 }
 function pruneTiles() {
   if (!tileState) return;
-  const {zi, need} = tileState;
+  const {need} = tileState;
   let all = true;
   for (const key of need) { const r = tileCache.get(key); if (r && !r.loaded && !r.failed) { all = false; break; } }
-  for (const [key, rec] of tileCache) if (rec.z !== zi && (all || Math.abs(rec.z - zi) > 3)) { rec.el.remove(); tileCache.delete(key); }
+  for (const [key, rec] of tileCache) {
+    const P = PROVIDERS[rec.p]; const zi = P ? clamp(Math.round(view.z), 2, P.max) : -1;
+    if (rec.z !== zi && (all || Math.abs(rec.z - zi) > 3)) { rec.el.remove(); tileCache.delete(key); }
+  }
 }
 
 /* ---------- state for the open dataset ---------- */
@@ -921,7 +962,7 @@ const stepZoom = dz => { userMoved = true; flyTo(view.lat, view.lng, clamp(Math.
 $('#zin').onclick = () => stepZoom(1);
 $('#zout').onclick = () => stepZoom(-1);
 $('#fit').onclick = () => { userMoved = false; fitVisible(); };
-$('#basemap').onchange = e => setProvider(e.target.value);
+$('#basemap').onchange = e => { setProvider(e.target.value); if (e.target.value !== 'chart') userProvider = e.target.value; };
 const visiblePts = () => rows.filter(d => d._on && hasPos(d)).flatMap(d => d.path ? d.path.flat().filter((p, i, a) => i % 4 === 0 || i === a.length - 1).map(([lat, lon]) => ({lat, lon})) : [{lat: d.lat, lon: d.lon}]);
 function fitVisible(ms) { const p = visiblePts(); if (p.length) fitPoints(p, {pad: 60, maxZ: 17, ms}); }
 function maybeFit() {
@@ -1042,6 +1083,9 @@ function activate(slug, init = {}) {
     applyGeoCache(ds);
     MODEL.built.set(cfg.slug, ds);
   }
+  { const chart = cfg.basemap === 'chart'; syncBasemapChoices(chart);
+    if (chart && provider !== 'chart') { userProvider = provider; setProvider('chart'); }
+    else if (!chart && provider === 'chart') setProvider(userProvider || 'osm'); }
   DS = ds; rows = ds.rows; sel = null; geoTok++; geoRunning = false; geoProgress = null; geoStop = false;
   $('#card').hidden = true; $('#mapwrap').classList.remove('has-card');
   $('#dsTitle').textContent = cfg.name;
