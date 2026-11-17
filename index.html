@@ -299,7 +299,6 @@ output{font-weight:650;font-variant-numeric:tabular-nums}
       </div>
       <select class="basemap" id="basemap" aria-label="Map tiles">
         <option value="osm">OpenStreetMap</option>
-        <option value="carto">OSM data · CARTO style</option>
       </select>
     </div>
     <div class="loading" id="loading" role="status">Loading data…</div>
@@ -634,9 +633,6 @@ const PROVIDERS = {
   osm:  {label: 'OpenStreetMap', max: 19,
          url: (z, x, y) => `https://tile.openstreetmap.org/${z}/${x}/${y}.png`,
          attrib: '© <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a> contributors'},
-  carto:{label: 'OSM data · CARTO style', max: 19,
-         url: (z, x, y) => `https://${'abcd'[(x + y) & 3]}.basemaps.cartocdn.com/rastertiles/voyager/${z}/${x}/${y}${devicePixelRatio > 1.4 ? '@2x' : ''}.png`,
-         attrib: '© <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a> contributors © <a href="https://carto.com/attributions" target="_blank" rel="noopener">CARTO</a>'},
   /* NOAA raster nautical charts, served as a PMTiles archive by CharTiles; only offered on datasets whose "Basemap" column says "chart" */
   chart:{label: 'Nautical chart (NOAA)', max: 16, under: 'osm',
          pm: 'https://chartiles-data.ivanstorck.workers.dev/charts/ee2129ccda808ba206e8976a0a5b3d6b243ec027f06a9e26259cbd13f7d8938f.pmtiles',
@@ -660,16 +656,16 @@ function syncBasemapChoices(allowChart) {
   const sel = $('#basemap'), has = !!sel.querySelector('option[value="chart"]');
   if (allowChart && !has) sel.insertAdjacentHTML('afterbegin', '<option value="chart">Nautical chart (NOAA)</option>');
   if (!allowChart && has) sel.querySelector('option[value="chart"]').remove();
+  sel.hidden = sel.options.length < 2;   // nothing to choose between
 }
-let provider = location.protocol === 'file:' ? 'carto' : 'osm';
-let noTilesMode = false, tileCache = new Map(), tileOK = 0, tileErr = 0, autoSwitched = false, toastTimer = 0, tileState = null;
-function setProvider(p, {auto = false} = {}) {
+let provider = 'osm';
+let noTilesMode = false, tileCache = new Map(), tileOK = 0, tileErr = 0, toastTimer = 0, tileState = null;
+function setProvider(p) {
   provider = p;
   for (const t of tileCache.values()) t.el.remove();
   tileCache = new Map(); tileOK = 0; tileErr = 0;
   $('#basemap').value = p;
   $('#attrib').innerHTML = PROVIDERS[p].attrib;
-  if (auto) toast('OpenStreetMap’s own tile server didn’t answer' + (location.protocol === 'file:' ? ' (normal when a page is opened as a local file)' : '') + ', so the map is using the same OpenStreetMap data drawn by CARTO.', 9000);
   schedule();
 }
 const labelsEl = $('#labels');
@@ -721,8 +717,7 @@ function renderTiles() {
         if (rec.p !== provider) return;
         tileErr++;
         if (tileOK === 0 && tileErr >= 4) {
-          if (provider === 'osm' && !autoSwitched) { autoSwitched = true; setProvider('carto', {auto: true}); }
-          else if (provider === 'carto' && !noTilesMode) setNoTiles(true);
+          if (provider === 'osm' && !noTilesMode) setNoTiles(true);
           else if (provider === 'chart') { setProvider(userProvider || 'osm'); toast('The nautical chart tiles couldn’t be loaded, so the map is showing OpenStreetMap instead.', 9000); }
         }
       };
