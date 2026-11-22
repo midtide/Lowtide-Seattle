@@ -116,6 +116,19 @@ output{font-weight:650;font-variant-numeric:tabular-nums}
 #markers{z-index:1;pointer-events:none}
 #markers .pin,#markers .cluster{pointer-events:auto}
 #lines{position:absolute;left:0;top:0;width:100%;height:100%;z-index:1;pointer-events:none;overflow:visible}
+#areas{position:absolute;left:0;top:0;width:100%;height:100%;z-index:1;pointer-events:none;overflow:visible}
+#areas.off,#areaLbls.off{display:none}
+.ar{fill:var(--c);fill-opacity:.55;stroke:#fff;stroke-width:1.3;stroke-opacity:.95;stroke-linejoin:round;cursor:zoom-in;transition:fill-opacity .12s}
+#areas.live .ar{pointer-events:visiblePainted}
+.ar:hover{fill-opacity:.75}
+.ar.zero{fill-opacity:.18}
+#areaLbls{position:absolute;inset:0;z-index:1;pointer-events:none;overflow:hidden}
+.alb{position:absolute;left:0;top:0;text-align:center;line-height:1.1;color:#2b2621;white-space:nowrap;text-shadow:0 0 3px #fff,0 0 3px #fff,0 0 6px #fff}
+.alb b{display:block;font-size:15px;font-weight:750;font-variant-numeric:tabular-nums}
+.alb.big b{font-size:19px}
+.alb span{display:block;font-size:10.5px;font-weight:650;letter-spacing:.04em;text-transform:uppercase;opacity:.85}
+#markers.fade .pin{opacity:var(--po,1)}
+#markers.fade .pin.sel,#markers.fade .pin.hl,#markers.fade .pin:hover{opacity:1}
 .rt .rtv{fill:none;stroke:var(--c);stroke-width:3.5;stroke-linecap:round;stroke-linejoin:round;opacity:.82;transition:opacity .15s}
 .rt .rth{fill:none;stroke:transparent;stroke-width:16;pointer-events:stroke;cursor:pointer}
 .rt.off{display:none}
@@ -282,6 +295,8 @@ output{font-weight:650;font-variant-numeric:tabular-nums}
     <div id="map" tabindex="0" role="application" aria-label="Map. Drag to pan, scroll to zoom.">
       <div id="tiles"></div>
       <div id="labels" aria-hidden="true"></div>
+      <svg id="areas" class="off"><g id="areasG"></g></svg>
+      <div id="areaLbls" class="off" aria-hidden="true"></div>
       <svg id="lines" aria-hidden="true"><g id="linesG"></g></svg>
       <div id="markers"></div>
     </div>
@@ -415,13 +430,13 @@ const col = (tab, ...names) => { const low = tab.labels.map(l => l.toLowerCase()
 function parseDatasetsTab(tab) {
   const iName = col(tab, 'dataset', 'name');
   if (iName < 0) throw new Error('The “Datasets” tab needs a column headed “Dataset”.');
-  const ix = {tab: col(tab, 'tab', 'sheet'), desc: col(tab, 'description'), yl: col(tab, 'year label'), tl: col(tab, 'type label'), eras: col(tab, 'eras'), place: col(tab, 'place', 'default place'), lines: col(tab, 'lines', 'line file'), basemap: col(tab, 'basemap')};
+  const ix = {tab: col(tab, 'tab', 'sheet'), desc: col(tab, 'description'), yl: col(tab, 'year label'), tl: col(tab, 'type label'), eras: col(tab, 'eras'), place: col(tab, 'place', 'default place'), lines: col(tab, 'lines', 'line file'), basemap: col(tab, 'basemap'), pins: col(tab, 'pins'), areas: col(tab, 'areas')};
   const g = (r, k) => ix[k] >= 0 ? txt(r[ix[k]]) : '';
   const out = [], seen = new Set();
   for (const r of tab.rows) {
     const name = txt(r[iName]); if (!name) continue;
     let slug = slugify(name); while (seen.has(slug)) slug += '-2'; seen.add(slug);
-    out.push({name, slug, tab: g(r, 'tab') || name, desc: g(r, 'desc'), yearLabel: g(r, 'yl') || 'Year', typeLabel: g(r, 'tl') || 'Type', eras: g(r, 'eras'), place: g(r, 'place'), lines: g(r, 'lines'), basemap: g(r, 'basemap').toLowerCase()});
+    out.push({name, slug, tab: g(r, 'tab') || name, desc: g(r, 'desc'), yearLabel: g(r, 'yl') || 'Year', typeLabel: g(r, 'tl') || 'Type', eras: g(r, 'eras'), place: g(r, 'place'), lines: g(r, 'lines'), basemap: g(r, 'basemap').toLowerCase(), pins: g(r, 'pins').toLowerCase(), areas: g(r, 'areas')});
   }
   return out;
 }
@@ -472,7 +487,11 @@ async function fetchModel() {
     try { const res = await fetch(url, {cache: 'no-cache'}); if (!res.ok) throw new Error(`${url} couldn’t be loaded (HTTP ${res.status}).`); lines[d.tab] = await res.json(); }
     catch (e) { errors[d.tab] = e.message; }
   }));
-  return {datasets: dTab, types: typesTab, tabs, errors, lines};
+  const areas = {};
+  await Promise.all(list.filter(d => d.areas).map(async d => {
+    try { const res = await fetch(CFG.data + d.areas, {cache: 'no-cache'}); if (res.ok) areas[d.tab] = await res.json(); } catch {}
+  }));
+  return {datasets: dTab, types: typesTab, tabs, errors, lines, areas};
 }
 /* the model keeps raw tabs ({labels, rows}); datasets are built from them on demand */
 function makeModel(raw) {
@@ -783,7 +802,7 @@ function buildPins() {
 function rebuildMarkers() {
   for (const el of clusterEls) el.remove();
   clusterEls = []; live = [];
-  const z = view.z, useCluster = z < 18.4, R = z >= 17 ? 30 : 46;
+  const z = view.z, useCluster = z < 18.4 && !(DS && DS.cfg.pins === 'fade'), R = z >= 17 ? 30 : 46;
   const shown = new Set(), cl = [];
   for (const d of rows) {
     if (!d._on || !hasPos(d) || d.path) continue;
@@ -825,6 +844,92 @@ function rebuildMarkers() {
     if (on) live.push({el, lat: d.lat, lng: d.lon});
   }
   updateLines();
+}
+/* ---------- area overlay: polygons colored by how many shown places fall inside, fading out as you zoom in ---------- */
+const areasEl = $('#areas'), areasG = $('#areasG'), areaLbls = $('#areaLbls');
+let AREAS = [];   // {name, level, rings: [[{x,y}]] at zoom 0, ll: rings in lat/lon, lab: {x,y}, el, lbl, n}
+const AREA_COLORS = ['#fde9b8', '#fbcf84', '#f6ab5a', '#e9803a', '#cf5527', '#a8361c'];
+const AREA_FULL = 12.5, AREA_GONE = 14.5, PIN_FAINT = 12, PIN_SOLID = 14.5;
+const areaLevel = z => z < 11.5 ? 'district' : 'hood';
+function buildAreas(gj) {
+  areasG.textContent = ''; areaLbls.textContent = ''; AREAS = [];
+  if (!gj || !Array.isArray(gj.features)) return;
+  for (const f of gj.features) {
+    const pr = f.properties || {}, g = f.geometry; if (!g) continue;
+    const polys = g.type === 'Polygon' ? [g.coordinates] : g.type === 'MultiPolygon' ? g.coordinates : [];
+    const a = {name: txt(pr.name), level: pr.level === 'district' ? 'district' : 'hood', n: 0, ll: polys,
+      rings: polys.flat().map(r => r.map(([lo, la]) => project(la, lo, 0))),
+      lab: project(+pr.ly, +pr.lx, 0)};
+    const xs = a.rings.flat().map(q => q.x), ys = a.rings.flat().map(q => q.y);
+    a.bb = [Math.min(...xs), Math.min(...ys), Math.max(...xs), Math.max(...ys)];
+    a.el = document.createElementNS(SVGNS, 'path'); a.el.setAttribute('class', 'ar'); a.el.setAttribute('fill-rule', 'evenodd');
+    a.tt = document.createElementNS(SVGNS, 'title'); a.el.appendChild(a.tt);
+    a.el.addEventListener('click', e => {
+      e.stopPropagation(); if (justDragged) return; userMoved = true;
+      const p0 = unproject(a.bb[0], a.bb[1], 0), p1 = unproject(a.bb[2], a.bb[3], 0);
+      fitPoints([{lat: p0.lat, lon: p0.lng}, {lat: p1.lat, lon: p1.lng}], {pad: 30, maxZ: PIN_SOLID});
+    });
+    a.lbl = document.createElement('div'); a.lbl.className = 'alb' + (a.level === 'district' ? ' big' : '');
+    areasG.appendChild(a.el); areaLbls.appendChild(a.lbl); AREAS.push(a);
+  }
+}
+function inPoly(la, lo, polys) {
+  let c = false;
+  for (const p of polys) for (const r of p) for (let i = 0, j = r.length - 1; i < r.length; j = i++) {
+    const [xi, yi] = r[i], [xj, yj] = r[j];
+    if ((yi > la) !== (yj > la) && lo < (xj - xi) * (la - yi) / (yj - yi) + xi) c = !c;
+  }
+  return c;
+}
+function countAreas() {
+  if (!AREAS.length) return;
+  const pts = rows.filter(d => d._on && hasPos(d));
+  for (const a of AREAS) a.n = pts.reduce((k, d) => k + (inPoly(d.lat, d.lon, a.ll) ? 1 : 0), 0);
+  for (const lvl of ['district', 'hood']) {
+    const as = AREAS.filter(a => a.level === lvl), max = Math.max(1, ...as.map(a => a.n));
+    for (const a of as) {
+      const k = a.n ? Math.min(AREA_COLORS.length - 1, Math.ceil(Math.sqrt(a.n / max) * (AREA_COLORS.length - 1))) : 0;
+      a.el.style.setProperty('--c', a.n ? AREA_COLORS[k] : '#9a9286'); a.el.classList.toggle('zero', !a.n);
+      a.tt.textContent = `${a.name}: ${a.n} shown here`;
+      a.lbl.innerHTML = `<b>${a.n}</b><span>${esc(a.name)}</span>`;
+    }
+  }
+}
+const ramp = (z, a, b) => clamp((z - a) / (b - a), 0, 1);
+function positionAreas() {
+  const z = view.z, fade = DS && DS.cfg.pins === 'fade';
+  markersEl.classList.toggle('fade', !!fade);
+  if (fade) markersEl.style.setProperty('--po', (0.3 + 0.7 * ramp(z, PIN_FAINT, PIN_SOLID)).toFixed(2));
+  const op = AREAS.length ? 1 - ramp(z, AREA_FULL, AREA_GONE) : 0;
+  areasEl.classList.toggle('off', op <= 0); areaLbls.classList.toggle('off', op <= 0);
+  if (op <= 0) return;
+  areasEl.style.opacity = areaLbls.style.opacity = op.toFixed(2);
+  areasEl.classList.toggle('live', op > 0.35);
+  const lvl = areaLevel(z), c = project(view.lat, view.lng, z), k = 2 ** z, ox = W / 2 - c.x, oy = H / 2 - c.y;
+  const cand = [];
+  for (const a of AREAS) {
+    const on = a.level === lvl;
+    const x0 = a.bb[0] * k + ox, y0 = a.bb[1] * k + oy, x1 = a.bb[2] * k + ox, y1 = a.bb[3] * k + oy;
+    const vis = on && x1 > -50 && y1 > -50 && x0 < W + 50 && y0 < H + 50;
+    a.el.style.display = vis ? '' : 'none'; a.lbl.style.display = 'none';
+    if (!vis) continue;
+    a.el.setAttribute('d', a.rings.map(r => 'M' + r.map(q => (q.x * k + ox).toFixed(1) + ' ' + (q.y * k + oy).toFixed(1)).join('L') + 'Z').join(''));
+    const w = Math.min(x1 - x0, y1 - y0);
+    if (w >= 18) cand.push({a, w, x: a.lab.x * k + ox, y: a.lab.y * k + oy});
+  }
+  /* biggest areas first; a name is dropped, then the count, when it would overlap a label already placed */
+  cand.sort((p, q) => q.w - p.w);
+  const placed = [], hit = r => placed.some(o => r[0] < o[2] && r[2] > o[0] && r[1] < o[3] && r[3] > o[1]);
+  for (const c of cand) {
+    const big = c.a.level === 'district', nw = Math.max(18, c.a.name.length * (big ? 7 : 6.6)), cw = big ? 24 : 20;
+    const full = [c.x - nw / 2, c.y - 17, c.x + nw / 2, c.y + 17], cnt = [c.x - cw / 2, c.y - 10, c.x + cw / 2, c.y + 10];
+    let r = null, name = false;
+    if (c.w > (big ? 40 : 70) && !hit(full)) { r = full; name = true; } else if (!hit(cnt)) r = cnt;
+    if (!r) continue;
+    placed.push(r); const el = c.a.lbl;
+    el.style.display = ''; el.querySelector('span').style.display = name ? '' : 'none';
+    el.style.transform = `translate3d(${c.x.toFixed(1)}px,${c.y.toFixed(1)}px,0) translate(-50%,-50%)`;
+  }
 }
 /* ---------- route lines: rows whose Name matches a feature in the dataset's line file ---------- */
 const SVGNS = 'http://www.w3.org/2000/svg', linesG = $('#linesG'), lineEls = new Map();
@@ -885,7 +990,7 @@ function positionMarkers() {
 function render() {
   const zq = Math.round(view.z * 4);
   if (zq !== lastZq) { lastZq = zq; rebuildMarkers(); }
-  renderTiles(); positionLabels(); positionMarkers();
+  renderTiles(); positionLabels(); positionMarkers(); positionAreas();
 }
 let raf = 0;
 function schedule() { if (!raf) raf = requestAnimationFrame(() => { raf = 0; render(); }); }
@@ -1101,7 +1206,7 @@ function activate(slug, init = {}) {
   $('#secYear').hidden = !ds.hasYear; $('#secType').hidden = ds.noTypes;
   $('#h-year').textContent = cfg.yearLabel; $('#h-type').textContent = cfg.typeLabel;
   $('#lblBy').hidden = !ds.hasMin; $('#lblNone').hidden = !ds.hasNone;
-  buildTypeUI(); buildYearUI(); buildPins(); buildLines();
+  buildTypeUI(); buildYearUI(); buildPins(); buildLines(); buildAreas(cfg.areas && MODEL.raw.areas && MODEL.raw.areas[cfg.tab]);
   apply({fit: false});
   const pts = visiblePts();
   fitPoints(pts.length ? pts : [{lat: CFG.center[0], lon: CFG.center[1]}], {pad: 50, maxZ: pts.length ? 17 : 12, ms: init.noFly ? 0 : 450});
@@ -1210,6 +1315,7 @@ function renderYear() {
 function apply({fit = false} = {}) {
   let n = 0;
   for (const d of rows) { d._on = passes(d); if (d._on) n++; }
+  countAreas();
   if (sel != null && !rows[sel]._on) { sel = null; $('#card').hidden = true; $('#mapwrap').classList.remove('has-card'); }
   ui.showing.textContent = n; $('#ofTotal').textContent = `of ${rows.length}`;
   renderYear(); renderFacets(); renderList();
