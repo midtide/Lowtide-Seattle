@@ -819,8 +819,9 @@ function buildPins() {
     b.type = 'button'; b.className = 'pin off';
     b.style.setProperty('--c', d.t.color);
     if (d.t.size) b.classList.add(d.t.size);
-    if (d.yk === 'by') b.classList.add('hollow');
-    if (d.yk === 'none' && DS.hasYear) b.classList.add('hollow', 'dashed');
+    /* tiny dots (National Register) stay solid whatever their year */
+    if (d.yk === 'by' && d.t.size !== 'tiny') b.classList.add('hollow');
+    if (d.yk === 'none' && DS.hasYear && d.t.size !== 'tiny') b.classList.add('hollow', 'dashed');
     b.innerHTML = pinSVG(d.t.shape);
     b.setAttribute('aria-label', `${d.name}${DS.hasYear ? ', ' + d.yt : ''}${d.hood ? ', ' + d.hood : ''}`);
     b.title = d.name + (DS.hasYear ? ' · ' + d.yt : '');
@@ -1326,7 +1327,7 @@ function renderList() {
   else items.sort((a, b) => (a.year ?? 9999) - (b.year ?? 9999) || cmp(a, b));
   const row = d => {
     const sub = [d.hood, DS.noTypes ? '' : d.type, hasPos(d) ? '' : 'no map position yet'].filter(Boolean).join(' · ');
-    return `<li><button class="item" type="button" data-id="${d.id}"${d.id === sel ? ' aria-current="true"' : ''}>${swatch(d.t, d.yk === 'by' ? 'hollow' : d.yk === 'none' && DS.hasYear ? 'hollow dashed' : '')}<span class="im"><span class="in">${esc(d.name)}</span><span class="is">${esc(sub)}</span></span>${DS.hasYear && d.yk !== 'none' ? `<span class="iy">${esc(d.yt)}</span>` : ''}</button></li>`;
+    return `<li><button class="item" type="button" data-id="${d.id}"${d.id === sel ? ' aria-current="true"' : ''}>${swatch(d.t, d.t.size === 'tiny' ? '' : d.yk === 'by' ? 'hollow' : d.yk === 'none' && DS.hasYear ? 'hollow dashed' : '')}<span class="im"><span class="in">${esc(d.name)}</span><span class="is">${esc(sub)}</span></span>${DS.hasYear && d.yk !== 'none' ? `<span class="iy">${esc(d.yt)}</span>` : ''}</button></li>`;
   };
   if (!DS.grouped) { ui.list.innerHTML = items.map(row).join(''); ui.empty.hidden = items.length > 0; return; }
   /* grouped by list, each group collapsible (closed until opened) with a checkbox that shows or hides the whole list */
