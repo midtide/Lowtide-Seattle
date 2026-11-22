@@ -82,6 +82,18 @@ output{font-weight:650;font-variant-numeric:tabular-nums}
 .trow .tn{flex:1;min-width:0}
 .trow .tc{color:var(--muted);font-variant-numeric:tabular-nums;min-width:2ch;text-align:right;padding-right:6px}
 .types li.zero .tn,.types li.zero .sw{opacity:.45}
+.types li.grp{display:block}
+.types li.grp:hover{background:none}
+.ghead{display:flex;align-items:center;gap:9px;padding:6px 6px;border-radius:8px}
+.ghead:hover{background:var(--soft)}
+.ghead .gcb{margin:0;accent-color:var(--accent)}
+.gtog{flex:1;display:flex;align-items:center;gap:9px;border:0;background:none;padding:0;text-align:left;font-weight:650;min-width:0}
+.gtog .gn{flex:1;min-width:0}
+.gtog .tc{color:var(--muted);font-weight:400;font-variant-numeric:tabular-nums;min-width:2ch;text-align:right;padding-right:6px}
+.caret{width:20px;height:20px;flex:none;display:inline-grid;place-items:center}
+.caret::before{content:"";width:7px;height:7px;border-right:2px solid var(--muted);border-bottom:2px solid var(--muted);transform:rotate(-45deg);transition:transform .15s}
+.grp.open .caret::before{transform:rotate(45deg)}
+.types.sub{margin:0 0 4px 22px}
 .only{position:absolute;right:38px;top:50%;transform:translateY(-50%);border:0;background:var(--soft);border-radius:6px;color:var(--accent);padding:2px 8px;font-size:12px;opacity:0;font-weight:600}
 .types li:hover .only,.only:focus-visible{opacity:1}
 @media (hover:none){.only{opacity:1}}
@@ -452,9 +464,9 @@ function parseDatasetsTab(tab) {
 }
 function parseTypesTab(tab) {
   if (!tab) return [];
-  const iD = col(tab, 'dataset'), iT = col(tab, 'type'), iC = col(tab, 'color', 'colour'), iS = col(tab, 'shape'), iZ = col(tab, 'size');
+  const iD = col(tab, 'dataset'), iT = col(tab, 'type'), iC = col(tab, 'color', 'colour'), iS = col(tab, 'shape'), iZ = col(tab, 'size'), iL = col(tab, 'list', 'group');
   if (iD < 0 || iT < 0) return [];
-  return tab.rows.map(r => ({dataset: txt(r[iD]).toLowerCase(), type: txt(r[iT]), color: iC >= 0 ? txt(r[iC]) : '', shape: iS >= 0 ? txt(r[iS]).toLowerCase() : '', size: iZ >= 0 ? txt(r[iZ]).toLowerCase() : ''})).filter(t => t.type);
+  return tab.rows.map(r => ({dataset: txt(r[iD]).toLowerCase(), type: txt(r[iT]), color: iC >= 0 ? txt(r[iC]) : '', shape: iS >= 0 ? txt(r[iS]).toLowerCase() : '', size: iZ >= 0 ? txt(r[iZ]).toLowerCase() : '', group: iL >= 0 ? txt(r[iL]) : ''})).filter(t => t.type);
 }
 /* ---------- CSV files in the data/ folder: a tab called "Old businesses" is data/old-businesses.csv ---------- */
 function parseCSV(text) {
@@ -520,7 +532,7 @@ function countRows(tab) { const i = col(tab, 'name', 'business', 'title'); retur
    Turning a tab into a dataset
    ==================================================================================== */
 const ALIAS = {
-  name: ['name', 'business', 'title'], type: ['type'], year: ['year', 'year founded', 'founded', 'year built', 'built'],
+  name: ['name', 'business', 'title'], type: ['type'], list: ['list', 'group'], year: ['year', 'year founded', 'founded', 'year built', 'built'],
   yearbasis: ['year basis'], yearlabel: ['year label'], yearmeans: ['year means'], address: ['address', 'street address'], city: ['city'], state: ['state'],
   hood: ['neighborhood', 'neighbourhood', 'area'], notes: ['notes', 'description', 'details'],
   src: ['source link', 'source', 'link', 'url', 'website'], conf: ['confidence'], pos: ['position', 'pin position'],
@@ -550,7 +562,7 @@ function buildDataset(cfg, tab, typesCfg) {
   const rows = [];
   for (const r of tab.rows) {
     const name = txt(get(r, 'name')); if (!name) continue;
-    const d = {id: rows.length, name, type: txt(get(r, 'type'))};
+    const d = {id: rows.length, name, type: txt(get(r, 'type')), group: txt(get(r, 'list'))};
     const ym = txt(get(r, 'year')).match(/\d{4}/); d.year = ym ? +ym[0] : null;
     const basis = txt(get(r, 'yearbasis')).toLowerCase();
     d.yk = d.year == null ? 'none' : 'exact';
@@ -570,16 +582,17 @@ function buildDataset(cfg, tab, typesCfg) {
     d.unmapped = d.lat == null && /^unmapped/i.test(txt(get(r, 'pos')));
     d.snapped = false;
     d.extra = extras.map(([i, l]) => [l, txt(r[i])]).filter(([, v]) => v !== '');
-    d.search = [d.name, d.addr, d.hood, d.type, d.place].join(' ').toLowerCase();
+    d.search = [d.name, d.addr, d.hood, d.type, d.group, d.place].join(' ').toLowerCase();
     rows.push(d);
   }
   /* types: declared ones first (Types tab), then any new ones found in the data */
   const types = [], byName = new Map();
-  const add = (name, color, shape, size = '') => { const k = name.toLowerCase(); if (byName.has(k)) return; const t = {name, color: '', shape: '', size: ['small', 'tiny'].includes(size) ? size : '', ci: types.length}; if (color && CSS.supports('color', color)) t.color = color; if (SHAPES[shape]) t.shape = shape; byName.set(k, t); types.push(t); };
+  const tkey = (group, name) => (group ? group.toLowerCase() + '|' : '') + name.toLowerCase();
+  const add = (name, color, shape, size = '', group = '') => { const k = tkey(group, name); if (byName.has(k)) return; const t = {name, group, key: group ? `${group} / ${name}` : name, color: '', shape: '', size: ['small', 'tiny'].includes(size) ? size : '', ci: types.length}; if (color && CSS.supports('color', color)) t.color = color; if (SHAPES[shape]) t.shape = shape; byName.set(k, t); types.push(t); };
   const mine = typesCfg.filter(t => t.dataset === cfg.name.toLowerCase());
-  mine.forEach(t => add(t.type, t.color, t.shape, t.size));
+  mine.forEach(t => add(t.type, t.color, t.shape, t.size, t.group));
   const noTypes = !rows.some(d => d.type);
-  if (!noTypes) for (const d of rows) add(d.type || 'Other', '', '');
+  if (!noTypes) for (const d of rows) add(d.type || 'Other', '', '', '', d.group);
   const usedC = new Set(types.map(t => t.color.toLowerCase()).filter(Boolean)), usedS = new Set(types.map(t => t.shape).filter(Boolean));
   let n = 0;
   for (const t of types) {
@@ -589,8 +602,8 @@ function buildDataset(cfg, tab, typesCfg) {
   }
   if (noTypes) types.length = 0;
   const fallbackType = {name: '', color: PALETTE[0], shape: 'circle'};
-  for (const d of rows) { const t = noTypes ? fallbackType : byName.get((d.type || 'Other').toLowerCase()); d.t = t; d.ti = noTypes ? -1 : types.indexOf(t); d.type = t.name; }
-  const ds = {cfg, rows, types, noTypes, fallbackType, hasYear: rows.some(d => d.year != null)};
+  for (const d of rows) { const t = noTypes ? fallbackType : byName.get(tkey(d.group, d.type || 'Other')); d.t = t; d.ti = noTypes ? -1 : types.indexOf(t); d.type = t.name; }
+  const ds = {cfg, rows, types, noTypes, fallbackType, hasYear: rows.some(d => d.year != null), grouped: types.some(t => t.group)};
   ds.hasMin = rows.some(d => d.yk === 'by'); ds.hasNone = ds.hasYear && rows.some(d => d.yk === 'none');
   ds.hasHood = rows.some(d => d.hood);
   if (ds.hasYear) {
@@ -1139,7 +1152,7 @@ function select(id, {fly = true, scroll = false} = {}) {
   const extras = d.extra.filter(([l]) => !/^image( credit| link)?$/i.test(l)).map(([l, v]) => isUrl(v) ? `<div><a href="${esc(v)}" target="_blank" rel="noopener noreferrer">${esc(l)} ↗</a></div>` : `<div>${esc(l)}: ${esc(v)}</div>`).join('');
   card.innerHTML = `
     <button class="x" type="button" aria-label="Close details">×</button>
-    <div class="chips">${DS.noTypes ? '' : `<span class="chip">${swatch(d.t)}${esc(d.type)}</span>`}
+    <div class="chips">${DS.noTypes ? '' : `<span class="chip">${swatch(d.t)}${d.group ? esc(d.group) + ' · ' : ''}${esc(d.type)}</span>`}
       ${d.conf ? `<span class="chip conf" style="--cc:${confColor(d.conf)}"><i></i>${esc(d.conf)} confidence</span>` : ''}</div>
     <h3>${esc(d.name)}</h3>
     ${DS.hasYear ? `<p class="yr"><b>${esc(d.yt)}</b>${esc(yearNote(d))}</p>` : ''}
@@ -1213,7 +1226,7 @@ function activate(slug, init = {}) {
   [...ui.nav.children].forEach(b => b.setAttribute('aria-pressed', b.dataset.slug === cfg.slug));
   F = {y0: ds.lo, y1: ds.hi, types: new Set(ds.types.map((t, i) => i)), q: '', inclBy: true, inclNone: true, sort: ds.hasYear ? 'year' : 'name'};
   if (init.y) { const m = init.y.match(/^(\d{4})-(\d{4})$/); if (m && ds.hasYear) { F.y0 = clamp(+m[1], ds.lo, ds.hi); F.y1 = clamp(+m[2], F.y0, ds.hi); } }
-  if (init.t != null && !ds.noTypes) { const names = init.t.split('~').map(s => s.toLowerCase()); F.types = new Set(ds.types.map((t, i) => names.includes(t.name.toLowerCase()) ? i : -1).filter(i => i >= 0)); }
+  if (init.t != null && !ds.noTypes) { const names = init.t.split('~').map(s => s.toLowerCase()); F.types = new Set(ds.types.map((t, i) => names.includes(t.key.toLowerCase()) || names.includes(t.name.toLowerCase()) ? i : -1).filter(i => i >= 0)); }
   if (init.q) F.q = init.q.toLowerCase();
   if (init.by === '0') F.inclBy = false;
   if (init.un === '0') F.inclNone = false;
@@ -1233,9 +1246,38 @@ function activate(slug, init = {}) {
   if (init.b != null && rows[init.b]) select(+init.b, {fly: true, scroll: true});
   startAutoGeocode();
 }
-function buildTypeUI() {
-  ui.types.innerHTML = DS.types.map((t, i) => `<li data-i="${i}"><label class="trow"><input type="checkbox" value="${i}" checked>${swatch(t)}<span class="tn">${esc(t.name)}</span><span class="tc"></span></label><button class="only" type="button" aria-label="Show only ${esc(t.name)}">only</button></li>`).join('');
+function typeRow(t, i) {
+  return `<li data-i="${i}"><label class="trow"><input type="checkbox" value="${i}" checked>${swatch(t)}<span class="tn">${esc(t.name)}</span><span class="tc"></span></label><button class="only" type="button" aria-label="Show only ${esc(t.name)}">only</button></li>`;
 }
+const openGroups = new Set();   // legend groups the viewer has expanded
+function buildTypeUI() {
+  if (!DS.grouped) { ui.types.innerHTML = DS.types.map(typeRow).join(''); return; }
+  /* one collapsible section per list ("List" column), closed by default */
+  const groups = [];
+  DS.types.forEach((t, i) => { let g = groups.find(x => x.name === t.group); if (!g) groups.push(g = {name: t.group, items: []}); g.items.push(i); });
+  ui.types.innerHTML = groups.map((g, gi) => {
+    const open = openGroups.has(g.name), t0 = DS.types[g.items[0]];
+    return `<li class="grp${open ? ' open' : ''}" data-g="${gi}"><div class="ghead">
+      <input type="checkbox" class="gcb" aria-label="Show ${esc(g.name || 'Other')}" checked>
+      <button type="button" class="gtog" aria-expanded="${open}">${g.items.length === 1 ? swatch(t0) : '<span class="caret" aria-hidden="true"></span>'}<span class="gn">${esc(g.name || 'Other')}</span><span class="tc"></span></button></div>
+      ${g.items.length > 1 ? `<ul class="types sub"${open ? '' : ' hidden'}>${g.items.map(i => typeRow(DS.types[i], i)).join('')}</ul>` : ''}</li>`;
+  }).join('');
+  ui.types._groups = groups;
+}
+ui.types.addEventListener('click', e => {
+  const tg = e.target.closest('.gtog'); if (!tg) return;
+  const li = tg.closest('.grp'), g = ui.types._groups[+li.dataset.g], sub = li.querySelector('.sub');
+  if (!sub) { const cb = li.querySelector('.gcb'); cb.checked = !cb.checked; cb.dispatchEvent(new Event('change', {bubbles: true})); return; }
+  const open = sub.hidden; sub.hidden = !open; li.classList.toggle('open', open); tg.setAttribute('aria-expanded', open);
+  open ? openGroups.add(g.name) : openGroups.delete(g.name);
+});
+ui.types.addEventListener('change', e => {
+  const gcb = e.target.closest('.gcb'); if (!gcb) return;
+  e.stopImmediatePropagation();
+  const g = ui.types._groups[+gcb.closest('.grp').dataset.g];
+  for (const i of g.items) gcb.checked ? F.types.add(i) : F.types.delete(i);
+  apply({fit: true});
+}, true);
 function buildYearUI() {
   if (!DS.hasYear) return;
   for (const i of [ui.y0, ui.y1]) { i.min = DS.lo; i.max = DS.hi; i.step = 1; }
@@ -1295,10 +1337,15 @@ function renderFacets() {
   if (!DS.noTypes) {
     const counts = DS.types.map(() => 0);
     for (const d of rows) if (passes(d, 'type')) counts[d.ti]++;
-    for (const li of ui.types.children) {
+    for (const li of ui.types.querySelectorAll('li[data-i]')) {
       const i = +li.dataset.i;
       li.querySelector('.tc').textContent = counts[i]; li.classList.toggle('zero', counts[i] === 0);
       li.querySelector('input').checked = F.types.has(i);
+    }
+    if (DS.grouped) for (const li of ui.types.querySelectorAll('li.grp')) {
+      const g = ui.types._groups[+li.dataset.g], on = g.items.filter(i => F.types.has(i)).length, cb = li.querySelector('.gcb');
+      li.querySelector('.ghead .tc').textContent = g.items.reduce((k, i) => k + counts[i], 0);
+      cb.checked = on === g.items.length; cb.indeterminate = on > 0 && on < g.items.length;
     }
   }
   if (!DS.hasYear) return;
@@ -1351,7 +1398,7 @@ function saveHash() {
     const p = new URLSearchParams();
     if (MODEL.list.length > 1 || MODEL.list[0].slug !== DS.cfg.slug) p.set('d', DS.cfg.slug);
     if (DS.hasYear && (F.y0 !== DS.lo || F.y1 !== DS.hi)) p.set('y', F.y0 + '-' + F.y1);
-    if (!DS.noTypes && F.types.size !== DS.types.length) p.set('t', [...F.types].map(i => DS.types[i].name).join('~'));
+    if (!DS.noTypes && F.types.size !== DS.types.length) p.set('t', [...F.types].map(i => DS.types[i].key).join('~'));
     if (F.q) p.set('q', F.q);
     if (!F.inclBy) p.set('by', '0');
     if (!F.inclNone) p.set('un', '0');
@@ -1367,7 +1414,7 @@ function readHash() {
 function currentState() {
   const o = {d: DS.cfg.slug};
   if (DS.hasYear && (F.y0 !== DS.lo || F.y1 !== DS.hi)) o.y = F.y0 + '-' + F.y1;
-  if (!DS.noTypes && F.types.size !== DS.types.length) o.t = [...F.types].map(i => DS.types[i].name).join('~');
+  if (!DS.noTypes && F.types.size !== DS.types.length) o.t = [...F.types].map(i => DS.types[i].key).join('~');
   if (F.q) o.q = F.q; if (!F.inclBy) o.by = '0'; if (!F.inclNone) o.un = '0'; o.s = F.sort; if (sel != null) o.b = sel;
   return o;
 }
