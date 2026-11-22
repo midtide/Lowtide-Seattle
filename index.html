@@ -151,6 +151,13 @@ output{font-weight:650;font-variant-numeric:tabular-nums}
 .pin.approx{opacity:.8}
 .pin.small{width:22px;height:22px;margin:-11px 0 0 -11px}
 .pin.small svg{width:16px;height:16px}
+.pin{z-index:2}
+.pin.tiny{width:16px;height:16px;margin:-8px 0 0 -8px;z-index:1}
+.pin.tiny svg{width:9px;height:9px;filter:none}
+.pin.tiny .shape{stroke-width:1.4;stroke:rgba(255,255,255,.85)}
+#markers .pin.tiny{opacity:.7}
+#markers.fade .pin.tiny{opacity:calc(var(--po,1) * .7)}
+#markers .pin.tiny:hover,#markers .pin.tiny.hl,#markers .pin.tiny.sel{opacity:1}
 .pin:hover svg,.pin.hl svg{transform:scale(1.25)}
 .pin:hover,.pin.hl{z-index:10}
 .pin.sel{z-index:20}
@@ -314,7 +321,8 @@ output{font-weight:650;font-variant-numeric:tabular-nums}
         <button id="fit" type="button" aria-label="Fit map to the places shown" title="Fit to results"><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M3 7V3h4M13 3h4v4M17 13v4h-4M7 17H3v-4"/></svg></button>
       </div>
       <select class="basemap" id="basemap" aria-label="Map tiles">
-        <option value="osm">OpenStreetMap</option>
+        <option value="light">Light gray (simple)</option>
+        <option value="osm">OpenStreetMap (detailed)</option>
       </select>
     </div>
     <div class="loading" id="loading" role="status">Loading data…</div>
@@ -566,7 +574,7 @@ function buildDataset(cfg, tab, typesCfg) {
   }
   /* types: declared ones first (Types tab), then any new ones found in the data */
   const types = [], byName = new Map();
-  const add = (name, color, shape, size = '') => { const k = name.toLowerCase(); if (byName.has(k)) return; const t = {name, color: '', shape: '', size: size === 'small' ? 'small' : '', ci: types.length}; if (color && CSS.supports('color', color)) t.color = color; if (SHAPES[shape]) t.shape = shape; byName.set(k, t); types.push(t); };
+  const add = (name, color, shape, size = '') => { const k = name.toLowerCase(); if (byName.has(k)) return; const t = {name, color: '', shape: '', size: ['small', 'tiny'].includes(size) ? size : '', ci: types.length}; if (color && CSS.supports('color', color)) t.color = color; if (SHAPES[shape]) t.shape = shape; byName.set(k, t); types.push(t); };
   const mine = typesCfg.filter(t => t.dataset === cfg.name.toLowerCase());
   mine.forEach(t => add(t.type, t.color, t.shape, t.size));
   const noTypes = !rows.some(d => d.type);
@@ -651,13 +659,18 @@ function fitPoints(pts, {pad = 70, maxZ = 17, ms = 480, bottom = 0} = {}) {
 
 /* tiles */
 const PROVIDERS = {
+  light:{label: 'Light gray', max: 16, over: 'lightref',
+         url: (z, x, y) => `https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Light_Gray_Base/MapServer/tile/${z}/${y}/${x}`,
+         attrib: '© <a href="https://www.esri.com/" target="_blank" rel="noopener">Esri</a>, HERE, Garmin, © <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a> contributors, GIS community'},
+  lightref:{label: '', max: 16,
+         url: (z, x, y) => `https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Light_Gray_Reference/MapServer/tile/${z}/${y}/${x}`},
   osm:  {label: 'OpenStreetMap', max: 19,
          url: (z, x, y) => `https://tile.openstreetmap.org/${z}/${x}/${y}.png`,
          attrib: '© <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a> contributors'},
   /* NOAA raster nautical charts, served as a PMTiles archive by CharTiles; only offered on datasets whose "Basemap" column says "chart" */
-  chart:{label: 'Nautical chart (NOAA)', max: 16, under: 'osm',
+  chart:{label: 'Nautical chart (NOAA)', max: 16, under: 'light',
          pm: 'https://chartiles-data.ivanstorck.workers.dev/charts/ee2129ccda808ba206e8976a0a5b3d6b243ec027f06a9e26259cbd13f7d8938f.pmtiles',
-         attrib: 'Chart <a href="https://www.nauticalcharts.noaa.gov/" target="_blank" rel="noopener">NOAA</a> via <a href="https://chartiles.com/" target="_blank" rel="noopener">CharTiles</a>, not for navigation · © <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a>'}
+         attrib: 'Chart <a href="https://www.nauticalcharts.noaa.gov/" target="_blank" rel="noopener">NOAA</a> via <a href="https://chartiles.com/" target="_blank" rel="noopener">CharTiles</a>, not for navigation · base © Esri, © <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a>'}
 };
 /* PMTiles reader, loaded only when a chart basemap is first used */
 let pmArchive = null;
@@ -679,7 +692,7 @@ function syncBasemapChoices(allowChart) {
   if (!allowChart && has) sel.querySelector('option[value="chart"]').remove();
   sel.hidden = sel.options.length < 2;   // nothing to choose between
 }
-let provider = 'osm';
+let provider = 'light';
 let noTilesMode = false, tileCache = new Map(), tileOK = 0, tileErr = 0, toastTimer = 0, tileState = null;
 function setProvider(p) {
   provider = p;
@@ -713,7 +726,7 @@ function toast(msg, ms = 5000) {
 }
 function renderTiles() {
   /* a chart basemap has gaps (other countries, rivers, small-scale bands), so a street map is drawn underneath it */
-  const layers = PROVIDERS[provider].under ? [PROVIDERS[provider].under, provider] : [provider];
+  const P0 = PROVIDERS[provider], layers = [P0.under, provider, P0.over].filter(Boolean);
   const need = new Set(); let zMain = 0;
   layers.forEach((lp, li) => {
   const P = PROVIDERS[lp], main = lp === provider;
@@ -738,8 +751,9 @@ function renderTiles() {
         if (rec.p !== provider) return;
         tileErr++;
         if (tileOK === 0 && tileErr >= 4) {
-          if (provider === 'osm' && !noTilesMode) setNoTiles(true);
-          else if (provider === 'chart') { setProvider(userProvider || 'osm'); toast('The nautical chart tiles couldn’t be loaded, so the map is showing OpenStreetMap instead.', 9000); }
+          if (provider === 'light') { setProvider('osm'); userProvider = 'osm'; }
+          else if (provider === 'osm' && !noTilesMode) setNoTiles(true);
+          else if (provider === 'chart') { setProvider(userProvider || 'light'); toast('The nautical chart tiles couldn’t be loaded, so the map is showing the regular basemap instead.', 9000); }
         }
       };
       if (P.pm) {
@@ -789,7 +803,7 @@ function buildPins() {
     const b = document.createElement('button');
     b.type = 'button'; b.className = 'pin off';
     b.style.setProperty('--c', d.t.color);
-    if (d.t.size === 'small') b.classList.add('small');
+    if (d.t.size) b.classList.add(d.t.size);
     if (d.yk === 'by') b.classList.add('hollow');
     if (d.yk === 'none' && DS.hasYear) b.classList.add('hollow', 'dashed');
     b.innerHTML = pinSVG(d.t.shape);
@@ -1188,7 +1202,7 @@ function activate(slug, init = {}) {
   }
   { const chart = cfg.basemap === 'chart'; syncBasemapChoices(chart);
     if (chart && provider !== 'chart') { userProvider = provider; setProvider('chart'); }
-    else if (!chart && provider === 'chart') setProvider(userProvider || 'osm'); }
+    else if (!chart && provider === 'chart') setProvider(userProvider || 'light'); }
   DS = ds; rows = ds.rows; sel = null; geoTok++; geoRunning = false; geoProgress = null; geoStop = false;
   $('#card').hidden = true; $('#mapwrap').classList.remove('has-card');
   $('#dsTitle').textContent = cfg.name;
