@@ -156,8 +156,8 @@ output{font-weight:650;font-variant-numeric:tabular-nums}
 .pin.tiny svg{width:12px;height:12px;filter:none}
 .pin.tiny .shape{stroke-width:1.4;stroke:rgba(255,255,255,.85)}
 #markers .pin.tiny{opacity:.85}
-/* register dots stay fairly dark when zoomed out instead of fading with the business pins */
-#markers.fade .pin.tiny{opacity:max(.75, calc(var(--po,1) * .85))}
+/* register dots fade with the business pins when zoomed out */
+#markers.fade .pin.tiny{opacity:calc(var(--po,1) * .85)}
 #markers .pin.tiny:hover,#markers .pin.tiny.hl,#markers .pin.tiny.sel{opacity:1}
 .pin:hover svg,.pin.hl svg{transform:scale(1.25)}
 .pin:hover,.pin.hl{z-index:10}
