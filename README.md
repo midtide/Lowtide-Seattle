@@ -6,8 +6,7 @@ An interactive [OpenStreetMap](https://www.openstreetmap.org/) map of interestin
 
 Datasets:
 
-- **Old businesses**: 88 Seattle businesses open to the public that started 50+ years ago.
-- **National Register**: 220 Seattle places on the National Register of Historic Places that still exist.
+- **Oldschool Seattle**: 88 Seattle businesses open to the public that started 50+ years ago (large pins) and 220 places on the National Register of Historic Places that still exist (small pins), with neighborhood counts when zoomed out.
 - **Streetcars 1931**: the 28 streetcar routes and 4 cable car lines in the Seattle Municipal Street Railway's April 1931 route list, drawn as selectable lines.
 - **Mosquito Fleet 1908**: 37 steamer runs and 93 ports of call from a 1908 Seattle Post-Intelligencer map of the Puget Sound “Mosquito Fleet,” drawn over water.
 
@@ -35,8 +34,8 @@ In the sheet, `apps-script/Code.gs` adds a **Map tools** menu (Extensions → Ap
 ## Sources and credits
 
 - Basemap: © [OpenStreetMap](https://www.openstreetmap.org/copyright) contributors (tiles from OpenStreetMap; the Mosquito Fleet tab uses NOAA nautical charts via CharTiles). Address look-ups use OpenStreetMap's Nominatim.
-- Old businesses: City of Seattle active business license file plus historical sources noted per row. Neighborhood overlays: City of Seattle Neighborhood Map Atlas (Office of the City Clerk), from [Seattle GeoData](https://data.seattle.gov/), Public Domain (PDDL); the City notes these are not official neighborhood boundaries.
-- National Register: [Wikipedia's list of National Register listings in Seattle](https://en.wikipedia.org/wiki/National_Register_of_Historic_Places_listings_in_Seattle) and National Park Service records. Years are the year a place was *added* to the Register, not when it was built. Some coordinates were corrected by hand (see the Notes column).
+- Oldschool Seattle, businesses: City of Seattle active business license file plus historical sources noted per row. Neighborhood overlays: City of Seattle Neighborhood Map Atlas (Office of the City Clerk), from [Seattle GeoData](https://data.seattle.gov/), Public Domain (PDDL); the City notes these are not official neighborhood boundaries.
+- Oldschool Seattle, National Register places: [Wikipedia's list of National Register listings in Seattle](https://en.wikipedia.org/wiki/National_Register_of_Historic_Places_listings_in_Seattle) and National Park Service records. Years are the year a place was *added* to the Register, not when it was built. Some coordinates were corrected by hand (see the Notes column).
 - Streetcars 1931: route list “Streetcar routes – April 1st, 1931” (Seattle Municipal Street Railway, mimeographed), as transcribed on [Gabor Sandi's Seattle 1931 page](http://www.tundria.com/trams/USA/Seattle-1931.php). Lines were traced by following each route's listed streets on OpenStreetMap's street network (© OpenStreetMap contributors, ODbL), so they follow present-day streets.
 - Mosquito Fleet 1908: map and list of 195 “Puget Sound Ports of Call” from the Seattle Post-Intelligencer, 1908. The map has no legend, so the runs are a best-effort reading of its lines. Each run was routed over a 40 m grid of open water built from OpenStreetMap coastlines and rivers (© OpenStreetMap contributors, ODbL), with a cost that keeps routes well offshore except in narrow channels; they are not recorded courses. Port pins sit at the historic dock where one was found: a matching dock in OpenStreetMap, or a wharf drawn on the oldest USGS topographic sheet covering the port (1897–1943, via the USGS National Map); each port's card names its source, and the 15 still estimated are marked approximate.
 - Old map crops on the Mosquito Fleet pins: USGS Historical Topographic Map Collection (public domain; each crop names its sheet and links to the full sheet). Lake Washington landings use only sheets from before the lake was lowered in 1916.

@@ -8,14 +8,14 @@ The map page reads these CSV files. Edit a file (on GitHub: open it → pencil i
 | --- | --- |
 | `datasets.csv` | One row per dataset. Each becomes a button at the top of the map. |
 | `types.csv` | Optional. Color and pin shape for each type in a dataset. Types missing here still work; the page picks colors for them. |
-| `old-businesses.csv`, `national-register.csv` | One file per dataset, one row per place. |
-| `seattle-neighborhoods.geojson` | City of Seattle Neighborhood Map Atlas districts and neighborhoods, simplified, used for the count overlay on Old businesses (the “Areas” column in `datasets.csv`). |
+| `oldschool-seattle.csv` | One row per place: old businesses and National Register places together. Register types start with “Register:”. The **Year means** column says what each row's year is (Founded, or Listed on the National Register). |
+| `seattle-neighborhoods.geojson` | City of Seattle Neighborhood Map Atlas districts and neighborhoods, simplified, used for the count overlay on Oldschool Seattle (the “Areas” column in `datasets.csv`). |
 | `streetcars-1931.csv`, `streetcars-1931.geojson` | A line dataset: one row per route in the CSV, and the route lines in the GeoJSON file. |
 | `mosquito-fleet-1908.csv`, `mosquito-fleet-1908.geojson` | Lines and pins together: steamer runs (matched to lines in the GeoJSON), ports of call drawn on the 1908 map, and “list only” ports named in the paper’s list. The **Follow-up** column says what still needs checking for each port (usually its landing, against old USGS topo sheets). |
 | `template.csv` | Column headings to copy when starting a new dataset. |
 | `seattle-map-data.xlsx` | The original starter workbook, kept only for the optional Google Sheets setup. The map doesn't read it. |
 
-A dataset's file name comes from its **Tab** in `datasets.csv`, lower-cased with spaces and punctuation turned into dashes: "Old businesses" → `old-businesses.csv`.
+A dataset's file name comes from its **Tab** in `datasets.csv`, lower-cased with spaces and punctuation turned into dashes: "Oldschool Seattle" → `oldschool-seattle.csv`.
 
 ## Add a dataset
 
@@ -27,11 +27,13 @@ A dataset's file name comes from its **Tab** in `datasets.csv`, lower-cased with
 
 A dataset can show lines instead of pins. Put the name of a GeoJSON file from this folder in the **Lines** column of `datasets.csv`. Each feature's `name` property must match a row's **Name** exactly; that row's line is then drawn on the map, can be clicked, and fills the detail card from the CSV. Rows with no matching feature fall back to an ordinary pin. LineString and MultiLineString geometries both work.
 
+In `types.csv`, an optional **Size** column set to `small` draws that type's pins smaller.
+
 Three more optional columns in `datasets.csv`:
 
 - **Basemap**: `chart` shows NOAA nautical charts (via CharTiles) instead of OpenStreetMap on that tab.
 - **Pins**: `fade` turns off the numbered groups of pins; instead pins fade out as you zoom out and become solid as you zoom in.
-- **Areas**: the name of a polygon GeoJSON file in this folder (features with `level` = `district` or `hood`, a `name`, and a label point `lx`/`ly`). When zoomed out, the map colors each area by how many of the places currently shown fall inside it, with the count as a label; the areas fade away as you zoom in.
+- **Areas**: the name of a polygon GeoJSON file in this folder (features with `level` = `district` or `hood`, a `name`, and a label point `lx`/`ly`). When zoomed out, the map colors each area by how many of the places currently shown fall inside it, with the count as a label; areas with none are not drawn, and the areas fade away as you zoom in.
 
 ## Dataset columns
 

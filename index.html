@@ -121,7 +121,6 @@ output{font-weight:650;font-variant-numeric:tabular-nums}
 .ar{fill:var(--c);fill-opacity:.55;stroke:#fff;stroke-width:1.3;stroke-opacity:.95;stroke-linejoin:round;cursor:zoom-in;transition:fill-opacity .12s}
 #areas.live .ar{pointer-events:visiblePainted}
 .ar:hover{fill-opacity:.75}
-.ar.zero{fill-opacity:.18}
 #areaLbls{position:absolute;inset:0;z-index:1;pointer-events:none;overflow:hidden}
 .alb{position:absolute;left:0;top:0;text-align:center;line-height:1.1;color:#2b2621;white-space:nowrap;text-shadow:0 0 3px #fff,0 0 3px #fff,0 0 6px #fff}
 .alb b{display:block;font-size:15px;font-weight:750;font-variant-numeric:tabular-nums}
@@ -150,6 +149,8 @@ output{font-weight:650;font-variant-numeric:tabular-nums}
 .pin.hollow .shape{fill:#fff;stroke:var(--c);stroke-width:3.4}
 .pin.dashed .shape{stroke-dasharray:3.4 2.4}
 .pin.approx{opacity:.8}
+.pin.small{width:22px;height:22px;margin:-11px 0 0 -11px}
+.pin.small svg{width:16px;height:16px}
 .pin:hover svg,.pin.hl svg{transform:scale(1.25)}
 .pin:hover,.pin.hl{z-index:10}
 .pin.sel{z-index:20}
@@ -442,9 +443,9 @@ function parseDatasetsTab(tab) {
 }
 function parseTypesTab(tab) {
   if (!tab) return [];
-  const iD = col(tab, 'dataset'), iT = col(tab, 'type'), iC = col(tab, 'color', 'colour'), iS = col(tab, 'shape');
+  const iD = col(tab, 'dataset'), iT = col(tab, 'type'), iC = col(tab, 'color', 'colour'), iS = col(tab, 'shape'), iZ = col(tab, 'size');
   if (iD < 0 || iT < 0) return [];
-  return tab.rows.map(r => ({dataset: txt(r[iD]).toLowerCase(), type: txt(r[iT]), color: iC >= 0 ? txt(r[iC]) : '', shape: iS >= 0 ? txt(r[iS]).toLowerCase() : ''})).filter(t => t.type);
+  return tab.rows.map(r => ({dataset: txt(r[iD]).toLowerCase(), type: txt(r[iT]), color: iC >= 0 ? txt(r[iC]) : '', shape: iS >= 0 ? txt(r[iS]).toLowerCase() : '', size: iZ >= 0 ? txt(r[iZ]).toLowerCase() : ''})).filter(t => t.type);
 }
 /* ---------- CSV files in the data/ folder: a tab called "Old businesses" is data/old-businesses.csv ---------- */
 function parseCSV(text) {
@@ -511,7 +512,7 @@ function countRows(tab) { const i = col(tab, 'name', 'business', 'title'); retur
    ==================================================================================== */
 const ALIAS = {
   name: ['name', 'business', 'title'], type: ['type'], year: ['year', 'year founded', 'founded', 'year built', 'built'],
-  yearbasis: ['year basis'], yearlabel: ['year label'], address: ['address', 'street address'], city: ['city'], state: ['state'],
+  yearbasis: ['year basis'], yearlabel: ['year label'], yearmeans: ['year means'], address: ['address', 'street address'], city: ['city'], state: ['state'],
   hood: ['neighborhood', 'neighbourhood', 'area'], notes: ['notes', 'description', 'details'],
   src: ['source link', 'source', 'link', 'url', 'website'], conf: ['confidence'], pos: ['position', 'pin position'],
   lat: ['latitude', 'lat'], lon: ['longitude', 'lon', 'lng', 'long']
@@ -548,6 +549,7 @@ function buildDataset(cfg, tab, typesCfg) {
     else if (/^(min|by|lower)/.test(basis) && d.year != null) d.yk = 'by';
     else if (/^(unclear|unknown)/.test(basis)) { d.yk = 'none'; d.year = null; }
     d.ynr = d.year == null && !basis;  /* no year and no basis: simply not recorded */
+    d.ym = txt(get(r, 'yearmeans'));
     d.yt = txt(get(r, 'yearlabel')) || (d.yk === 'exact' ? String(d.year) : d.yk === 'approx' ? 'c. ' + d.year : d.yk === 'by' ? 'By ' + d.year : d.ynr ? 'Not recorded' : 'Unclear');
     d.addr = txt(get(r, 'address'));
     d.place = [txt(get(r, 'city')), txt(get(r, 'state'))].filter(Boolean).join(', ') || cfg.place || CFG.place;
@@ -564,9 +566,9 @@ function buildDataset(cfg, tab, typesCfg) {
   }
   /* types: declared ones first (Types tab), then any new ones found in the data */
   const types = [], byName = new Map();
-  const add = (name, color, shape) => { const k = name.toLowerCase(); if (byName.has(k)) return; const t = {name, color: '', shape: '', ci: types.length}; if (color && CSS.supports('color', color)) t.color = color; if (SHAPES[shape]) t.shape = shape; byName.set(k, t); types.push(t); };
+  const add = (name, color, shape, size = '') => { const k = name.toLowerCase(); if (byName.has(k)) return; const t = {name, color: '', shape: '', size: size === 'small' ? 'small' : '', ci: types.length}; if (color && CSS.supports('color', color)) t.color = color; if (SHAPES[shape]) t.shape = shape; byName.set(k, t); types.push(t); };
   const mine = typesCfg.filter(t => t.dataset === cfg.name.toLowerCase());
-  mine.forEach(t => add(t.type, t.color, t.shape));
+  mine.forEach(t => add(t.type, t.color, t.shape, t.size));
   const noTypes = !rows.some(d => d.type);
   if (!noTypes) for (const d of rows) add(d.type || 'Other', '', '');
   const usedC = new Set(types.map(t => t.color.toLowerCase()).filter(Boolean)), usedS = new Set(types.map(t => t.shape).filter(Boolean));
@@ -787,6 +789,7 @@ function buildPins() {
     const b = document.createElement('button');
     b.type = 'button'; b.className = 'pin off';
     b.style.setProperty('--c', d.t.color);
+    if (d.t.size === 'small') b.classList.add('small');
     if (d.yk === 'by') b.classList.add('hollow');
     if (d.yk === 'none' && DS.hasYear) b.classList.add('hollow', 'dashed');
     b.innerHTML = pinSVG(d.t.shape);
@@ -910,7 +913,7 @@ function positionAreas() {
   for (const a of AREAS) {
     const on = a.level === lvl;
     const x0 = a.bb[0] * k + ox, y0 = a.bb[1] * k + oy, x1 = a.bb[2] * k + ox, y1 = a.bb[3] * k + oy;
-    const vis = on && x1 > -50 && y1 > -50 && x0 < W + 50 && y0 < H + 50;
+    const vis = on && a.n > 0 && x1 > -50 && y1 > -50 && x0 < W + 50 && y0 < H + 50;
     a.el.style.display = vis ? '' : 'none'; a.lbl.style.display = 'none';
     if (!vis) continue;
     a.el.setAttribute('d', a.rings.map(r => 'M' + r.map(q => (q.x * k + ox).toFixed(1) + ' ' + (q.y * k + oy).toFixed(1)).join('L') + 'Z').join(''));
@@ -1085,7 +1088,7 @@ function pinOffset() {
   return H / 2 - clamp((H - card.offsetHeight - 34) / 2, 56, H / 2);
 }
 function yearNote(d) {
-  const l = DS.cfg.yearLabel;
+  const l = d.ym || DS.cfg.yearLabel;
   return d.yk === 'exact' ? l : d.yk === 'approx' ? `${l} (approximate)` : d.yk === 'by' ? `${l}: a minimum, the real year may be earlier` : d.ynr ? `${l}: not recorded` : `${l} unclear`;
 }
 /* phone layout: the panel under the map can shrink to a bar, and does so when a place is opened */
