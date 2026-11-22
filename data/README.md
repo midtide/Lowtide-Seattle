@@ -8,7 +8,7 @@ The map page reads these CSV files. Edit a file (on GitHub: open it → pencil i
 | --- | --- |
 | `datasets.csv` | One row per dataset. Each becomes a button at the top of the map. |
 | `types.csv` | Optional. Color and pin shape for each type in a dataset. Types missing here still work; the page picks colors for them. |
-| `oldschool-seattle.csv` | One row per place from three lists, named in the **List** column: Oldest businesses, Stalwarts & Gems, National Register. The legend shows one collapsible group per list. Register places all share the type “National Register place”; their own category (Houses, Bridges…) is in the **Register category** column. The **Year means** column says what each row's year is (Founded, or Listed on the National Register). |
+| `oldschool-seattle.csv` | One row per place from three lists, named in the **List** column: Oldest businesses, Stalwarts & Gems, National Register. The Results panel shows one collapsible group per list. Register places all share the type “National Register place”; their own category (Houses, Bridges…) is in the **Register category** column. The **Year means** column says what each row's year is (Founded, or Listed on the National Register). |
 | `seattle-neighborhoods.geojson` | City of Seattle Neighborhood Map Atlas districts and neighborhoods, simplified, used for the count overlay on Oldschool Seattle (the “Areas” column in `datasets.csv`). |
 | `streetcars-1931.csv`, `streetcars-1931.geojson` | A line dataset: one row per route in the CSV, and the route lines in the GeoJSON file. |
 | `mosquito-fleet-1908.csv`, `mosquito-fleet-1908.geojson` | Lines and pins together: steamer runs (matched to lines in the GeoJSON), ports of call drawn on the 1908 map, and “list only” ports named in the paper’s list. The **Follow-up** column says what still needs checking for each port (usually its landing, against old USGS topo sheets). |
@@ -27,7 +27,7 @@ A dataset's file name comes from its **Tab** in `datasets.csv`, lower-cased with
 
 A dataset can show lines instead of pins. Put the name of a GeoJSON file from this folder in the **Lines** column of `datasets.csv`. Each feature's `name` property must match a row's **Name** exactly; that row's line is then drawn on the map, can be clicked, and fills the detail card from the CSV. Rows with no matching feature fall back to an ordinary pin. LineString and MultiLineString geometries both work.
 
-A dataset whose rows have a **List** column gets a grouped legend: one collapsible section per list, with that list's types inside. In `types.csv`, give each type its **List** too; the same type name can appear under two lists (Repair & personal services does) and each gets its own checkbox. An optional **Size** column set to `small` draws that type's pins smaller, and `tiny` draws them as small muted dots.
+A dataset whose rows have a **List** column gets grouped results: one collapsible section per list in the Results panel, each with a checkbox that shows or hides that whole list. In `types.csv`, give each type its **List** too. The same type name can appear under two lists (Repair & personal services does); the type legend shows it once and its checkbox covers both. An optional **Size** column set to `small` draws that type's pins smaller, and `tiny` draws them as small muted dots.
 
 Three more optional columns in `datasets.csv`:
 

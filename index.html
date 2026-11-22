@@ -82,8 +82,9 @@ output{font-weight:650;font-variant-numeric:tabular-nums}
 .trow .tn{flex:1;min-width:0}
 .trow .tc{color:var(--muted);font-variant-numeric:tabular-nums;min-width:2ch;text-align:right;padding-right:6px}
 .types li.zero .tn,.types li.zero .sw{opacity:.45}
-.types li.grp{display:block}
-.types li.grp:hover{background:none}
+.rgrp{display:block}
+.rgrp .ghead{padding:8px 10px}
+.list.sub{padding:0 0 6px 18px}
 .ghead{display:flex;align-items:center;gap:9px;padding:6px 6px;border-radius:8px}
 .ghead:hover{background:var(--soft)}
 .ghead .gcb{margin:0;accent-color:var(--accent)}
@@ -92,8 +93,8 @@ output{font-weight:650;font-variant-numeric:tabular-nums}
 .gtog .tc{color:var(--muted);font-weight:400;font-variant-numeric:tabular-nums;min-width:2ch;text-align:right;padding-right:6px}
 .caret{width:20px;height:20px;flex:none;display:inline-grid;place-items:center}
 .caret::before{content:"";width:7px;height:7px;border-right:2px solid var(--muted);border-bottom:2px solid var(--muted);transform:rotate(-45deg);transition:transform .15s}
-.grp.open .caret::before{transform:rotate(45deg)}
-.types.sub{margin:0 0 4px 22px}
+.rgrp.open .caret::before{transform:rotate(45deg)}
+
 .only{position:absolute;right:38px;top:50%;transform:translateY(-50%);border:0;background:var(--soft);border-radius:6px;color:var(--accent);padding:2px 8px;font-size:12px;opacity:0;font-weight:600}
 .types li:hover .only,.only:focus-visible{opacity:1}
 @media (hover:none){.only{opacity:1}}
@@ -1137,7 +1138,7 @@ function select(id, {fly = true, scroll = false} = {}) {
   for (const b of $('#list').querySelectorAll('.item')) {
     const on = d && b.dataset.id === String(d.id);
     on ? b.setAttribute('aria-current', 'true') : b.removeAttribute('aria-current');
-    if (on && scroll) b.scrollIntoView({block: 'nearest'});
+    if (on && scroll) { const sub = b.closest('.sub'); if (sub && sub.hidden) { sub.hidden = false; const li = sub.closest('.rgrp'); li.classList.add('open'); li.querySelector('.gtog').setAttribute('aria-expanded', 'true'); openGroups.add(li.dataset.g); } b.scrollIntoView({block: 'nearest'}); }
   }
   const card = $('#card');
   $('#mapwrap').classList.toggle('has-card', !!d);
@@ -1246,38 +1247,24 @@ function activate(slug, init = {}) {
   if (init.b != null && rows[init.b]) select(+init.b, {fly: true, scroll: true});
   startAutoGeocode();
 }
-function typeRow(t, i) {
-  return `<li data-i="${i}"><label class="trow"><input type="checkbox" value="${i}" checked>${swatch(t)}<span class="tn">${esc(t.name)}</span><span class="tc"></span></label><button class="only" type="button" aria-label="Show only ${esc(t.name)}">only</button></li>`;
+function typeRow(t, ids) {
+  const v = ids.join(',');
+  return `<li data-is="${v}"><label class="trow"><input type="checkbox" value="${v}" checked>${swatch(t)}<span class="tn">${esc(t.name)}</span><span class="tc"></span></label><button class="only" type="button" aria-label="Show only ${esc(t.name)}">only</button></li>`;
 }
-const openGroups = new Set();   // legend groups the viewer has expanded
-function buildTypeUI() {
-  if (!DS.grouped) { ui.types.innerHTML = DS.types.map(typeRow).join(''); return; }
-  /* one collapsible section per list ("List" column), closed by default */
-  const groups = [];
-  DS.types.forEach((t, i) => { let g = groups.find(x => x.name === t.group); if (!g) groups.push(g = {name: t.group, items: []}); g.items.push(i); });
-  ui.types.innerHTML = groups.map((g, gi) => {
-    const open = openGroups.has(g.name), t0 = DS.types[g.items[0]];
-    return `<li class="grp${open ? ' open' : ''}" data-g="${gi}"><div class="ghead">
-      <input type="checkbox" class="gcb" aria-label="Show ${esc(g.name || 'Other')}" checked>
-      <button type="button" class="gtog" aria-expanded="${open}">${g.items.length === 1 ? swatch(t0) : '<span class="caret" aria-hidden="true"></span>'}<span class="gn">${esc(g.name || 'Other')}</span><span class="tc"></span></button></div>
-      ${g.items.length > 1 ? `<ul class="types sub"${open ? '' : ' hidden'}>${g.items.map(i => typeRow(DS.types[i], i)).join('')}</ul>` : ''}</li>`;
-  }).join('');
-  ui.types._groups = groups;
+const openGroups = new Set();   // result groups the viewer has expanded
+/* legend entries: one per type name, so a type shared by two lists (e.g. Repair & personal services) is a single checkbox */
+function legendEntries() {
+  const out = [];
+  DS.types.forEach((t, i) => { const e = out.find(x => x.t.name.toLowerCase() === t.name.toLowerCase()); e ? e.ids.push(i) : out.push({t, ids: [i]}); });
+  return out;
 }
-ui.types.addEventListener('click', e => {
-  const tg = e.target.closest('.gtog'); if (!tg) return;
-  const li = tg.closest('.grp'), g = ui.types._groups[+li.dataset.g], sub = li.querySelector('.sub');
-  if (!sub) { const cb = li.querySelector('.gcb'); cb.checked = !cb.checked; cb.dispatchEvent(new Event('change', {bubbles: true})); return; }
-  const open = sub.hidden; sub.hidden = !open; li.classList.toggle('open', open); tg.setAttribute('aria-expanded', open);
-  open ? openGroups.add(g.name) : openGroups.delete(g.name);
-});
-ui.types.addEventListener('change', e => {
-  const gcb = e.target.closest('.gcb'); if (!gcb) return;
-  e.stopImmediatePropagation();
-  const g = ui.types._groups[+gcb.closest('.grp').dataset.g];
-  for (const i of g.items) gcb.checked ? F.types.add(i) : F.types.delete(i);
-  apply({fit: true});
-}, true);
+function buildTypeUI() { ui.types.innerHTML = legendEntries().map(e => typeRow(e.t, e.ids)).join(''); }
+/* the lists ("List" column) as groups of type indices, in the order they first appear */
+function listGroups() {
+  const gs = [];
+  DS.types.forEach((t, i) => { let g = gs.find(x => x.name === t.group); if (!g) gs.push(g = {name: t.group, items: []}); g.items.push(i); });
+  return gs;
+}
 function buildYearUI() {
   if (!DS.hasYear) return;
   for (const i of [ui.y0, ui.y1]) { i.min = DS.lo; i.max = DS.hi; i.step = 1; }
@@ -1295,11 +1282,11 @@ ui.eras.addEventListener('click', e => {
   if (b.dataset.i === 'all') { F.y0 = DS.lo; F.y1 = DS.hi; } else { const r = DS.eras[+b.dataset.i]; F.y0 = r.a; F.y1 = r.b; }
   apply({fit: true});
 });
-ui.types.addEventListener('change', e => { const cb = e.target.closest('input'); if (!cb) return; cb.checked ? F.types.add(+cb.value) : F.types.delete(+cb.value); apply({fit: true}); });
+ui.types.addEventListener('change', e => { const cb = e.target.closest('input'); if (!cb) return; for (const i of cb.value.split(',').map(Number)) cb.checked ? F.types.add(i) : F.types.delete(i); apply({fit: true}); });
 ui.types.addEventListener('click', e => {
   const o = e.target.closest('.only'); if (!o) return;
-  const k = +o.parentElement.dataset.i;
-  F.types = (F.types.size === 1 && F.types.has(k)) ? new Set(DS.types.map((t, i) => i)) : new Set([k]);
+  const ks = o.parentElement.dataset.is.split(',').map(Number);
+  F.types = (F.types.size === ks.length && ks.every(k => F.types.has(k))) ? new Set(DS.types.map((t, i) => i)) : new Set(ks);
   apply({fit: true});
 });
 $('#tAll').onclick = () => { F.types = new Set(DS.types.map((t, i) => i)); apply({fit: true}); };
@@ -1318,7 +1305,17 @@ const resetAll = () => {
   ui.q.value = ''; ui.qclr.hidden = true; apply({fit: true});
 };
 $('#reset').onclick = resetAll; $('#reset2').onclick = resetAll;
-ui.list.addEventListener('click', e => { const b = e.target.closest('.item'); if (b) select(+b.dataset.id, {fly: true}); });
+ui.list.addEventListener('click', e => {
+  const tg = e.target.closest('.gtog');
+  if (tg) { const li = tg.closest('.rgrp'), sub = li.querySelector('.sub'), open = sub.hidden; sub.hidden = !open; li.classList.toggle('open', open); tg.setAttribute('aria-expanded', open); open ? openGroups.add(li.dataset.g) : openGroups.delete(li.dataset.g); return; }
+  const b = e.target.closest('.item'); if (b) select(+b.dataset.id, {fly: true});
+});
+ui.list.addEventListener('change', e => {
+  const cb = e.target.closest('.gcb'); if (!cb) return;
+  const g = listGroups().find(x => x.name === cb.closest('.rgrp').dataset.g);
+  for (const i of g.items) cb.checked ? F.types.add(i) : F.types.delete(i);
+  apply({fit: true});
+});
 ui.list.addEventListener('mouseover', e => { const b = e.target.closest('.item'); if (b) pinEls.get(+b.dataset.id)?.classList.add('hl'); });
 ui.list.addEventListener('mouseout', e => { const b = e.target.closest('.item'); if (b) pinEls.get(+b.dataset.id)?.classList.remove('hl'); });
 
@@ -1327,25 +1324,30 @@ function renderList() {
   if (F.sort === 'name') items.sort(cmp);
   else if (F.sort === 'hood') items.sort((a, b) => a.hood.localeCompare(b.hood) || cmp(a, b));
   else items.sort((a, b) => (a.year ?? 9999) - (b.year ?? 9999) || cmp(a, b));
-  ui.list.innerHTML = items.map(d => {
+  const row = d => {
     const sub = [d.hood, DS.noTypes ? '' : d.type, hasPos(d) ? '' : 'no map position yet'].filter(Boolean).join(' · ');
-    return `<li><button class="item" type="button" data-id="${d.id}"${d.id === sel ? ' aria-current="true"' : ''}>${swatch(d.t, d.yk === 'by' ? 'hollow' : d.yk === 'none' && DS.hasYear ? 'hollow dashed' : '')}<span class="im"><span class="in">${esc(d.name)}</span><span class="is">${esc(sub)}</span></span>${DS.hasYear ? `<span class="iy">${esc(d.yt)}</span>` : ''}</button></li>`;
+    return `<li><button class="item" type="button" data-id="${d.id}"${d.id === sel ? ' aria-current="true"' : ''}>${swatch(d.t, d.yk === 'by' ? 'hollow' : d.yk === 'none' && DS.hasYear ? 'hollow dashed' : '')}<span class="im"><span class="in">${esc(d.name)}</span><span class="is">${esc(sub)}</span></span>${DS.hasYear && d.yk !== 'none' ? `<span class="iy">${esc(d.yt)}</span>` : ''}</button></li>`;
+  };
+  if (!DS.grouped) { ui.list.innerHTML = items.map(row).join(''); ui.empty.hidden = items.length > 0; return; }
+  /* grouped by list, each group collapsible (closed until opened) with a checkbox that shows or hides the whole list */
+  ui.list.innerHTML = listGroups().map(g => {
+    const its = items.filter(d => g.items.includes(d.ti)), open = openGroups.has(g.name), on = g.items.filter(i => F.types.has(i)).length;
+    return `<li class="rgrp${open ? ' open' : ''}" data-g="${esc(g.name)}"><div class="ghead">
+      <input type="checkbox" class="gcb" aria-label="Show ${esc(g.name || 'Other')}"${on ? ' checked' : ''} data-ind="${on > 0 && on < g.items.length ? 1 : 0}">
+      <button type="button" class="gtog" aria-expanded="${open}"><span class="caret" aria-hidden="true"></span><span class="gn">${esc(g.name || 'Other')}</span><span class="tc">${its.length}</span></button></div>
+      <ol class="list sub"${open ? '' : ' hidden'}>${its.map(row).join('')}</ol></li>`;
   }).join('');
+  for (const cb of ui.list.querySelectorAll('.gcb')) cb.indeterminate = cb.dataset.ind === '1';
   ui.empty.hidden = items.length > 0;
 }
 function renderFacets() {
   if (!DS.noTypes) {
     const counts = DS.types.map(() => 0);
     for (const d of rows) if (passes(d, 'type')) counts[d.ti]++;
-    for (const li of ui.types.querySelectorAll('li[data-i]')) {
-      const i = +li.dataset.i;
-      li.querySelector('.tc').textContent = counts[i]; li.classList.toggle('zero', counts[i] === 0);
-      li.querySelector('input').checked = F.types.has(i);
-    }
-    if (DS.grouped) for (const li of ui.types.querySelectorAll('li.grp')) {
-      const g = ui.types._groups[+li.dataset.g], on = g.items.filter(i => F.types.has(i)).length, cb = li.querySelector('.gcb');
-      li.querySelector('.ghead .tc').textContent = g.items.reduce((k, i) => k + counts[i], 0);
-      cb.checked = on === g.items.length; cb.indeterminate = on > 0 && on < g.items.length;
+    for (const li of ui.types.children) {
+      const ids = li.dataset.is.split(',').map(Number), n = ids.reduce((k, i) => k + counts[i], 0), on = ids.filter(i => F.types.has(i)).length, cb = li.querySelector('input');
+      li.querySelector('.tc').textContent = n; li.classList.toggle('zero', n === 0);
+      cb.checked = on === ids.length; cb.indeterminate = on > 0 && on < ids.length;
     }
   }
   if (!DS.hasYear) return;

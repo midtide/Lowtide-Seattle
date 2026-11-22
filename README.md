@@ -6,7 +6,7 @@ An interactive [OpenStreetMap](https://www.openstreetmap.org/) map of interestin
 
 Datasets:
 
-- **Oldschool Seattle**: three lists on one map, each a collapsible group in the legend: Oldest businesses (88 Seattle businesses open to the public that started 50+ years ago), Stalwarts & Gems (53 long-running and independent Seattle places for film, books, music, repair, making, art and reuse) and National Register (220 places on the National Register of Historic Places that still exist, as small gray dots), with neighborhood counts when zoomed out.
+- **Oldschool Seattle**: three lists on one map, each a collapsible group in the results: Oldest businesses (88 Seattle businesses open to the public that started 50+ years ago), Stalwarts & Gems (53 long-running and independent Seattle places for film, books, music, repair, making, art and reuse) and National Register (220 places on the National Register of Historic Places that still exist, as small gray dots), with neighborhood counts when zoomed out.
 - **Streetcars 1931**: the 28 streetcar routes and 4 cable car lines in the Seattle Municipal Street Railway's April 1931 route list, drawn as selectable lines.
 - **Mosquito Fleet 1908**: 37 steamer runs and 93 ports of call from a 1908 Seattle Post-Intelligencer map of the Puget Sound “Mosquito Fleet,” drawn over water.
 
