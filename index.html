@@ -1155,7 +1155,7 @@ function select(id, {fly = true, scroll = false} = {}) {
     <div class="chips">${DS.noTypes ? '' : `<span class="chip">${swatch(d.t)}${d.group ? esc(d.group) + ' · ' : ''}${esc(d.type)}</span>`}
       ${d.conf ? `<span class="chip conf" style="--cc:${confColor(d.conf)}"><i></i>${esc(d.conf)} confidence</span>` : ''}</div>
     <h3>${esc(d.name)}</h3>
-    ${DS.hasYear ? `<p class="yr"><b>${esc(d.yt)}</b>${esc(yearNote(d))}</p>` : ''}
+    ${DS.hasYear && d.yk !== 'none' ? `<p class="yr"><b>${esc(d.yt)}</b>${esc(yearNote(d))}</p>` : ''}
     ${d.addr || d.hood ? `<p class="addr">${esc(d.addr)}${d.addr && d.place ? ', ' + esc(d.place) : ''}${d.hood ? ` <span>${d.addr ? '· ' : ''}${esc(d.hood)}</span>` : ''}</p>` : ''}
     ${d.notes ? `<p class="notes">${esc(d.notes)}</p>` : ''}
     ${figure}
